@@ -1,5 +1,5 @@
 {
-  "beats": 14,
+  "beats": 15,
   "blocker": {
     "detail": "S6g launch gate pending for qa-dryrun-synth: projected all-in cost $17.16 (sft $0.83 + train $2.16 + eval-window cap $15) vs cap $50, stop-gate $100 (see 07-launch-report.json)",
     "kind": "needs-decision",
@@ -15,7 +15,7 @@
   "failure": null,
   "git": {
     "branch": "claude/determined-sagan-aseyod",
-    "head": "40b69e7"
+    "head": "0b747f1"
   },
   "history": [
     {
@@ -101,6 +101,12 @@
       "status": "BLOCKED",
       "ts": "2026-08-21T21:49:36Z",
       "verb": "beat"
+    },
+    {
+      "phase": "waiting on launch gate",
+      "status": "BLOCKED",
+      "ts": "2026-08-21T21:53:33Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -121,5 +127,5 @@
   "session_id": "6649e08c-7c64-53b0-af7a-e548113a5b86",
   "started_at": "2026-08-21T21:04:22Z",
   "status": "BLOCKED",
-  "updated_at": "2026-08-21T21:49:36Z"
+  "updated_at": "2026-08-21T21:53:33Z"
 }
