@@ -25,6 +25,12 @@
       "event": "renewed",
       "stage": "launch",
       "ts": "2026-08-21T21:05:16Z"
+    },
+    {
+      "by": "6649e08c-7c64-53b0-af7a-e548113a5b86",
+      "event": "renewed",
+      "stage": "launch",
+      "ts": "2026-08-21T21:12:09Z"
     }
   ],
   "kind": "cloud-claim",
@@ -36,5 +42,5 @@
   "released_at": null,
   "run_id": null,
   "schema": 1,
-  "updated_at": "2026-08-21T21:05:16Z"
+  "updated_at": "2026-08-21T21:12:09Z"
 }
