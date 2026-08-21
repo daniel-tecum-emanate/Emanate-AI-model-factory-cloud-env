@@ -1,0 +1,28 @@
+{
+  "claimed_at": "2026-08-21T21:04:37Z",
+  "current_stage": "S1",
+  "emitter": {
+    "name": "cloud-claim.sh",
+    "version": 1
+  },
+  "heartbeat_ref": "refs/heads/cloud-fleet/6649e08c-7c64-53b0-af7a-e548113a5b86",
+  "held_by": "6649e08c-7c64-53b0-af7a-e548113a5b86",
+  "history": [
+    {
+      "by": "6649e08c-7c64-53b0-af7a-e548113a5b86",
+      "event": "claimed",
+      "stage": "S1",
+      "ts": "2026-08-21T21:04:37Z"
+    }
+  ],
+  "kind": "cloud-claim",
+  "lane": "finetune-qa-dryrun-synth",
+  "model_stream": "per-account",
+  "org_slug": "qa-dryrun-synth",
+  "prior_claim": null,
+  "release_reason": null,
+  "released_at": null,
+  "run_id": null,
+  "schema": 1,
+  "updated_at": "2026-08-21T21:04:37Z"
+}
