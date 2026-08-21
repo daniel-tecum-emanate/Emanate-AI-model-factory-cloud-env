@@ -10,12 +10,6 @@
   "history": [
     {
       "by": "6649e08c-7c64-53b0-af7a-e548113a5b86",
-      "event": "claimed",
-      "stage": "S1",
-      "ts": "2026-08-21T21:04:37Z"
-    },
-    {
-      "by": "6649e08c-7c64-53b0-af7a-e548113a5b86",
       "event": "renewed",
       "stage": "project",
       "ts": "2026-08-21T21:04:57Z"
@@ -67,6 +61,12 @@
       "event": "renewed",
       "stage": "launch",
       "ts": "2026-08-21T21:40:44Z"
+    },
+    {
+      "by": "6649e08c-7c64-53b0-af7a-e548113a5b86",
+      "event": "renewed",
+      "stage": "launch",
+      "ts": "2026-08-21T21:45:09Z"
     }
   ],
   "kind": "cloud-claim",
@@ -78,5 +78,5 @@
   "released_at": null,
   "run_id": null,
   "schema": 1,
-  "updated_at": "2026-08-21T21:40:44Z"
+  "updated_at": "2026-08-21T21:45:09Z"
 }
