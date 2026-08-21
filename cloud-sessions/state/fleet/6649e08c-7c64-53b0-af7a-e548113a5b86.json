@@ -1,5 +1,5 @@
 {
-  "beats": 2,
+  "beats": 3,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -21,6 +21,12 @@
       "status": "ACTIVE",
       "ts": "2026-08-21T21:04:22Z",
       "verb": "start"
+    },
+    {
+      "phase": "running without DB sync - fire payload carried no relay_claim_code/app_base_url",
+      "status": "ACTIVE",
+      "ts": "2026-08-21T21:04:31Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -30,13 +36,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-qa-dryrun-synth",
-  "last_verb": "start",
+  "last_verb": "beat",
   "note": "orchestrating qa-dryrun-synth fine-tune pipeline",
-  "phase": "",
+  "phase": "running without DB sync - fire payload carried no relay_claim_code/app_base_url",
   "progress": null,
   "schema": 1,
   "session_id": "6649e08c-7c64-53b0-af7a-e548113a5b86",
   "started_at": "2026-08-21T21:04:22Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-21T21:04:22Z"
+  "updated_at": "2026-08-21T21:04:31Z"
 }
