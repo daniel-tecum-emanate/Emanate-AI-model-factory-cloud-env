@@ -1,0 +1,67 @@
+slug: preflight-linter
+role_family: verifier
+mission: Build and run the binding pre-upload linters; machine-verify every review claim.
+stages:
+- S5
+status: draft
+spec_version: v1
+# Budget raised 1.50 -> 3.50 and turns 25 -> 35 (MF-FINETUNE-EXEC, 2026-07-30
+# grand-steel run 523ecbbf): the verifier-family default budget-killed the node
+# at $1.54/346s (ledger tier2 row, 12:26 PT) BEFORE it could emit a verdict —
+# the first run with a real corpus to verify (578 records + a 9-check battery
+# with self-tests) costs more than the pre-corpus 'suspect' passes did. A
+# budget-killed verifier yields verdict=None -> 'suspect', which is correct
+# fail-closed behavior but wrong economics. Reviewable number, per
+# factory_node_run's own guidance.
+runtime:
+  budget_usd: 3.50
+  max_turns: 35
+read_first:
+- the corpus under review
+- the review program's claimed findings
+- prior linter scripts as a base
+# Added 2026-07-30 (MF-FINETUNE-EXEC, grand-steel run 523ecbbf): the org's OWN
+# battery + instrument-coverage wrapper live with the run, not in the PTC
+# worktree — without this pointer three consecutive dispatches re-inspected only
+# the 5 PTC scripts and returned `suspect` for gaps that were already closed.
+- 'the org battery of record + 1:1 mapping to the catalog checks: platform-alpha/finetune-out/families-grand-steel/PREFLIGHT-README.md
+  (for grand-steel: gs_corpus/verify_corpus_gs.py [11 checks + --self-test] and gs_corpus/style_wrapper_1a.py
+  [feeds tool-call-argument prose through the UNMODIFIED catalog style instrument + --self-test])'
+mandate:
+- task: self-test every linter on a gold sample and a seeded-fault sample before running it for real
+  stop_or_ask: never ship a linter verdict without a passing self-test
+- task: cross-check the linter's verdict against the review program's claims
+  stop_or_ask: escalate any disagreement rather than silently trusting one over the other
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/preflight-linter.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- linter report + self-test results
+done_when: the linter self-tests on gold+seeded-fault fixtures; agree/disagree with the review program
+  is explicit
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: '1'
+evidence_pointer: V6-LINTERS, PREFLIGHT-DIAG, V5-SHORTCUT-CHECK
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

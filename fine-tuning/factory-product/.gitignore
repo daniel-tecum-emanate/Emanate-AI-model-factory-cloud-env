@@ -1,0 +1,7 @@
+# runs/ is intentionally NOT ignored here (unlike the pre-move factory-automation/factory/.gitignore,
+# which excluded it by default). Daniel explicitly authorized committing the real run artifacts
+# (corpora, manifests, rigor reports, cost packets, eval results) to this single unified location
+# on 2026-08-13, after a data-governance check (FORBIDDEN_ORG_PREFIX cross-org guard + PII review —
+# see fine-tuning/factory-product/AGENTS.md) found no violation. __pycache__/, *.pyc, .DS_Store are
+# already ignored repo-wide by the root .gitignore; .pytest_cache/ and .ruff_cache/ carry their own
+# nested "ignore everything" .gitignore files that moved with this directory.

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# argv-recorder — a `claude` stand-in that records its argv and does NOTHING else.
+#
+# fixtures/fake-claude imitates the CLI's dispatch output, which is what the session-id
+# capture tests need. The chooser matrix needs the opposite: a binary that proves WHICH
+# branch of `cs new` ran and proves that nothing was dispatched. So this prints no
+# `View:` line, which means `cs` can record no session id, which means an empty ledger
+# after the matrix is itself evidence that no dispatch path was taken.
+#
+# The argv is what identifies the branch:
+#   here   -> the bare task, or no arguments at all
+#   cloud  -> --cloud <brief>
+#   rc     -> --remote-control [name]
+#
+#   ARGV_LOG   file to append <arg>…</arg> lines to, one per argument, then <end/>.
+#              The delimiters are load-bearing: they distinguish one argument
+#              containing spaces from several arguments.
+#   ARGV_EXIT  exit status to report (default 0)
+
+if [ -n "${ARGV_LOG:-}" ]; then
+  { for a in "$@"; do printf '<arg>%s</arg>\n' "$a"; done; printf '<end/>\n'; } >> "$ARGV_LOG"
+fi
+echo "argv-recorder ran with $# argument(s)"
+exit "${ARGV_EXIT:-0}"

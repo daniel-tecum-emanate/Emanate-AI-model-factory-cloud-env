@@ -1,0 +1,35 @@
+{
+  "dataset_file": "runs/qa-dryrun-synth/rehearsal/qa-rehearsal-v1.jsonl",
+  "sha256": "7b4ca427b407aa6887fd8f6273bc1a32275f0fa3229733724e2fb02947706caf",
+  "records": 3,
+  "bytes": 945,
+  "family_counts": {
+    "qa_rehearsal_stub": 3
+  },
+  "dataset_id": "qa-rehearsal-v1",
+  "run": "qa-rehearsal-v1 (hand-authored 3-row stub, not a real corpus — this rehearsal proves the cloud-dispatch → Trigger.dev → (stubbed) Fireworks chain, not model quality)",
+  "hyperparams_frozen": {
+    "base": "accounts/fireworks/models/qwen3p6-27b",
+    "output": "accounts/emanate/models/qa-dryrun-synth-v1-agent",
+    "lora_rank": 32,
+    "lora_alpha": 32,
+    "epochs": 1,
+    "learning_rate": 3e-06,
+    "weight_decay": 0.0,
+    "target_modules": "all-linear",
+    "source": "fine-tuning/factory-product/configs/qa-dryrun-synth.yaml training: block"
+  },
+  "cost_basis": {
+    "packet": "N/A — rehearsal only, Fireworks calls are stubbed (FIREWORKS_API_BASE_URL points at a local stand-in), no real spend",
+    "platform_tokens_calibrated": 0,
+    "best_estimate_all_in_usd": 0,
+    "range_usd": [0, 0],
+    "canary_estimate_usd": [0, 0]
+  },
+  "approval_basis": {
+    "note": "Daniel, 2026-08-19: 'i want the end to end functionality to work from the start button' — simulated rehearsal first, no real Fireworks spend this round (AskUserQuestion answer). Caps: qa-dryrun-synth.yaml budget block (train_all_in_cap_usd: 35, stop_gate_usd: 100) — moot for a stubbed dispatch, kept for shape-fidelity."
+  },
+  "signed_by": "CLAUDE-CODE-QA-REHEARSAL-V1",
+  "signed_at": "2026-08-19T21:15:00-07:00",
+  "immutability": "any resume of this rehearsal must re-hash qa-rehearsal-v1.jsonl and refuse on mismatch, same as a real launch"
+}

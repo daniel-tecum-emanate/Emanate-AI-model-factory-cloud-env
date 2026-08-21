@@ -1,0 +1,8 @@
+{
+  "node_id": "S4",
+  "factory_run_id": "dddddddd-0000-0000-0000-000000000001",
+  "ts": "2026-07-29T12:07:22.573566-07:00",
+  "cursor_agent_id": "agent-abc",
+  "cursor_run_id": "run-xyz",
+  "cursor_runtime": "cloud"
+}

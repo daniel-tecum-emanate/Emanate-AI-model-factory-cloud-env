@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# fake-open — stand-in for macOS `open`, installed on PATH by the suite.
+#
+# `cs open` and `cs web` call bare `open`, which would launch a real browser on the
+# operator's machine for every test run. This records the URL instead, so the tests
+# can assert WHICH url would have been opened — the part that can actually regress.
+#
+#   FAKE_OPEN_LOG   file to append each argument to
+
+[ -n "$FAKE_OPEN_LOG" ] && printf '%s\n' "$@" >> "$FAKE_OPEN_LOG"
+exit 0

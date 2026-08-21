@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# fake-claude — a stand-in for the `claude` CLI.
+#
+# THIS IS THE REASON THE SUITE IS $0. `cs` resolves its binary from $CS_CLAUDE_BIN
+# first, so pointing that at this script means no test can ever reach the real CLI,
+# dispatch a cloud session, or consume a rate limit. The suite also puts this file
+# on PATH as `claude`, so even a code path that ignored CS_CLAUDE_BIN lands here.
+#
+# It reproduces the output SHAPES recorded in reference/verified-facts.md, and
+# nothing else. It never touches the network.
+#
+# Controlled entirely by environment variables so a test can bend one detail:
+#   FAKE_LOG           append the argv it was called with, one <arg>…</arg> per
+#                      argument. The delimiters are what make the log unambiguous:
+#                      a test can assert an argument's exact boundaries, so a
+#                      message containing spaces, quotes or newlines is
+#                      distinguishable from several separate arguments.
+#   FAKE_ENV_LOG       append the value of CCR_FORCE_BUNDLE it inherited
+#   FAKE_VIEW_ID       session id to put on the authoritative `View:` line
+#   FAKE_DECOY_ID      a DIFFERENT id to sprinkle on non-authoritative lines
+#   FAKE_NO_VIEW=1     omit the `View:` line entirely (dispatch with no id in output)
+#   FAKE_TRAILING_DECOY=1  add a decoy id AFTER the View: line, so a naive
+#                      whole-transcript grep piped to `tail -1` picks the wrong one
+#   FAKE_AUTH_METHOD   authMethod reported by `auth status` (default claude.ai)
+#   FAKE_AUTH_FAIL=1   `auth status` prints nothing and exits 1
+#   FAKE_VERSION       version string reported by --version
+#   FAKE_EXIT          exit code for the dispatch path (default 0)
+
+if [ -n "$FAKE_LOG" ]; then
+  { for a in "$@"; do printf '<arg>%s</arg>\n' "$a"; done; printf '<end/>\n'; } >> "$FAKE_LOG"
+fi
+if [ -n "$FAKE_ENV_LOG" ]; then
+  printf 'CCR_FORCE_BUNDLE=%s\n' "$CCR_FORCE_BUNDLE" >> "$FAKE_ENV_LOG"
+fi
+
+VIEW_ID="${FAKE_VIEW_ID:-session_01ViewLineWins}"
+DECOY_ID="${FAKE_DECOY_ID:-session_01DecoyMustLose}"
+
+case "$1" in
+  --version)
+    echo "${FAKE_VERSION:-2.1.229 (Claude Code)}"
+    exit 0 ;;
+  auth)
+    if [ "$2" = "status" ]; then
+      [ -n "$FAKE_AUTH_FAIL" ] && exit 1
+      printf '{"loggedIn": true, "authMethod": "%s", "apiProvider": "firstParty", "email": "test@example.invalid", "subscriptionType": "max"}\n' \
+        "${FAKE_AUTH_METHOD:-claude.ai}"
+      exit 0
+    fi
+    exit 1 ;;
+  --teleport)
+    echo "Validating session"
+    echo "teleported into $2"
+    exit 0 ;;
+  --remote-control)
+    echo "Remote Control server started${2:+ as $2}"
+    exit 0 ;;
+  -p)
+    # headless steering: claude -p "<msg>" --cloud <id> --output-format json
+    printf '{"ok":true,"session_id":"%s","url":"https://claude.ai/code/%s?from=cli&m=0"}\n' "$4" "$4"
+    exit 0 ;;
+esac
+
+# Dispatch path: claude --cloud "<task>" [--environment <id>]
+# The FIRST line echoes the task title back. That echo is the whole reason the
+# session-id capture was wrong once: a task that names another session id used to
+# win over the authoritative View: URL below.
+echo "✔ Created cloud session: $2"
+[ -z "$FAKE_NO_VIEW" ] && echo "View: https://claude.ai/code/${VIEW_ID}?from=cli&m=0"
+echo "Resume with: claude --teleport ${VIEW_ID}"
+[ -n "$FAKE_TRAILING_DECOY" ] && echo "  (previously: ${DECOY_ID})"
+exit "${FAKE_EXIT:-0}"

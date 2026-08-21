@@ -1,0 +1,66 @@
+slug: corpus-reader
+role_family: reader
+mission: 100% per-record checklist read on an assigned line range — no sampling.
+stages:
+- S4
+- S5
+status: draft
+spec_version: v1
+# cursor_sdk pilot (Daniel, 2026-07-29): the ONE spec opted into Cursor-SDK
+# dispatch so the product's Stop/Pause/Resume/Send-message controls are live
+# during the Grand Steel run. Chosen because it is a pure reader — the
+# cursor_sdk path has NO max_turns/budget enforcement (schema.json
+# runtime.executor note), so the pilot must be a spec where a runaway costs
+# little. NOT preflight-linter: that spec is the dispatch test suite's
+# canonical tier2 verifier fixture. `local` because the C1 cloud spike is
+# still blocked on the GitHub connector (zero repos granted).
+runtime:
+  executor: cursor_sdk
+  cursor_runtime: local
+  # Required in practice: the SDK's Agent.create refuses to default the model
+  # (startup_error "missing_model", 2026-07-29 grand-steel S4) — schema.json's
+  # "absent = the SDK's own default" note is stale. Cheap model on purpose:
+  # this is a checklist read, and the cursor_sdk path has no budget cap.
+  # Must be a slug from the SDK's Cursor.models.list() — "composer-2.5-fast"
+  # was rejected with invalid_argument on 2026-07-29.
+  cursor_model: composer-2.5
+read_first:
+- the review checklist template
+- the assigned line range + output path
+mandate:
+- task: read every record in the assigned range against the checklist
+  stop_or_ask: never skip a record — flag ambiguous ones instead of guessing
+- task: write verdicts incrementally, not only at the end
+  stop_or_ask: n/a — this is mandatory, not a judgment call (L47)
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+single_writer:
+  owns:
+  - this reader's own output file (own line range only)
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- per-record verdict file (KEEP/STRIP/CURATE/CUT/REWRITE), incrementally written
+done_when: every record in the assigned range gets a verdict; writes are incremental (crash-safe)
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: 12 (or 4)
+evidence_pointer: V6-REVIEW readers; A1 Phase-0-D-READ-*
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

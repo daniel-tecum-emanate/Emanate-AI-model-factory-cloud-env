@@ -1,0 +1,52 @@
+# recipe-hazards — the versioned, APPEND-ONLY tuple->lesson map CMP-FAIL-02
+# evaluates (DESIGN.md §4 A3). Seeded 2026-07-31 by SWARM-PHASE0 from
+# MIXTURE-HISTORY.md §0 (the v5/E21 row and the v4 multi-variable row).
+# Every hazard traces to a recorded NO-GO or minted lesson. Additions ride
+# A1/A2/A3 fail-findings via A4's promotion gate (>=2 recurrences or one
+# blocking + human approval) — never self-applied edits.
+#
+# v0 mechanics (documented, deliberately simple): `pattern` hazards scan the
+# run's BUILD-SPEC + config text — any trigger pattern present WITHOUT any
+# countermeasure pattern is a fail. `changed_variable_bound` hazards bound
+# CMP-REC-01's changed-variable count. Patterns are matched case-insensitively.
+
+schema_version: 1
+
+hazards:
+  - id: HZ-E21-STAGED-EVIDENCE
+    kind: pattern
+    lesson_refs: [E21, L53]
+    severity: blocking
+    source: "company-brain/3-execution/MIXTURE-HISTORY.md#S0-v5"
+    description: >-
+      Staged-evidence posture at scale without must-call twins taught v5
+      "answer from what's provided" -> tool avoidance (recited-without-calling
+      293/745 vs v3's 0; NO-GO). The corpus passed every preflight built for
+      earlier failure classes.
+    trigger_patterns: ["staged", "prior transcript"]
+    countermeasure_patterns: ["must-call twin", "must_call", "twin ratio",
+                              ">=1:1", "\u22651:1"]
+
+  - id: HZ-V4-MULTIVARIABLE
+    kind: changed_variable_bound
+    lesson_refs: [L38]
+    severity: warn
+    source: "company-brain/3-execution/MIXTURE-HISTORY.md#S0-v4"
+    description: >-
+      v4 changed ~6 recipe variables at once -> attribution impossible by
+      design; a $123 run that cannot attribute its own regression buys less
+      than it cost.
+    max_changed_variables: 4
+
+  - id: HZ-L38-DOSE-CARRYFORWARD
+    kind: pattern
+    lesson_refs: [L38]
+    severity: blocking
+    source: "company-brain/3-execution/MIXTURE-HISTORY.md#S0-v4"
+    description: >-
+      A dose curve measured inside one corpus shape does not transfer: v4
+      applied v3's 130K eff-lb rule to a reshaped corpus and both >=130K
+      classes REGRESSED (dose-outcome correlation ~0).
+    trigger_patterns: ["dose carried forward", "dose inherited from",
+                       "doses carried forward"]
+    countermeasure_patterns: ["re-measur", "re-derive", "re-derived"]

@@ -1,0 +1,128 @@
+# Factory per-org config TEMPLATE — copy to <org-slug>.yaml and fill.
+# Every value here is an INPUT the factory refuses to guess. Numbers come from a fresh
+# census (S1) and readiness report, never from another org's file.
+
+org:
+  slug: <org-slug>
+  id: <org-uuid>                     # prod org_id
+  name: <display name>
+  customer_status: UNCONFIRMED       # UNCONFIRMED | CONTRACTED | DEMO — Kiara confirms; S2 refuses UNCONFIRMED/DEMO
+
+book:  # from the org's own census — never copied from another org
+  accounts: 0
+  fact_bearing_accounts: 0
+  zero_order_accounts: 0
+  book_revenue_usd: 0
+  transcripts: 0
+  reviews: 0
+  runs_total: 0
+  usable_runs: 0
+  actionable_runs: 0
+  reviews_with_trajectory_id: 0
+
+census:
+  tier: null                         # A (full stack) | B (book only) | C (insufficient)
+  axis_verdict: null                 # full | behavioral-dominant | factual-dominant
+  census_doc: <path to census report>
+  readiness_report: <path to per-org readiness report>
+
+model_plan:
+  base_model: accounts/fireworks/models/qwen3p6-27b
+  output_model: accounts/emanate/models/<org-slug>-v1-agent
+  variant: null                      # full | behavioral-dominant | declined (tier C)
+  slices:
+    replay: true
+    real_trajectories: false         # Tier B: false until agent has run ~2-4 weeks
+    specialist: true
+    factual_qa: full | floor-only | none
+  qa_pairs_estimate: 0
+  trajectory_selection_estimate: [0, 0]
+  seed: 42
+  inventory_tool: match_inventory    # Oracle default; SteelAPI orgs use query_inventory
+  custom_watch_items: []
+  system_prompt_source: buildSystemPrompt(allowedActions, customActions)
+
+training:  # FROZEN don't-disturb list (V5-ARCHITECTURE) — change only via a Daniel-signed decision
+  lora_rank: 32
+  lora_alpha: 32
+  learning_rate: 3.0e-6
+  epochs: 1
+  weight_decay: 0.0
+  target_modules: all-linear
+
+champion:
+  model_id: null                     # the org's OWN current champion (null on first train); champions never transfer across orgs
+  baseline: frontier-agent
+
+gates:
+  baselines: TBD-first-baseline-run  # L41: baseline every gate on the incumbent BEFORE training
+  structure: lexicographic
+
+budget:
+  ptc_reference_tokens_per_epoch: 3998200
+  token_volume_fraction_of_ptc: 0.0  # estimate from corpus plan vs PTC's 35,778-record corpus
+  sft_rate_usd_per_m: 3.00
+  dual_bucket_multiplier: 2.0        # L34
+  projection_calibration: 1.3        # RUNBOOK #6
+  unroll_multiplier: 1.386           # L22
+  eval_window_cap_usd: 15
+  train_all_in_cap_usd: 0            # per-org cap from the readiness projection
+  stop_gate_usd: 100                 # hard stop — raise only with Daniel's explicit approval
+
+governance:
+  data_use_clearance: PENDING        # PENDING | CLEARED — standard clause status per org contract
+  dpa_signed: false
+  training_rights_clause: false
+  pii_egress_cleared: false
+  permitted_uses: []                 # subset of [retrieval, eval, sft, preference, research]
+
+serving:
+  mode: undecided                    # shared-multi-lora | dedicated | undecided
+  activation_table: org_custom_models
+  min_accelerators: 2
+
+paths:
+  platform_repo: platform-alpha
+  dossiers_out: finetune-out/dossiers-<org-slug>
+  export_script: scripts/export-account-dossiers.ts
+
+# Optional additive streams. Keep the legacy top-level blocks above as the
+# implicit `per-account` plan; do not move an active run into this map.
+model_plans:
+  intelligence:
+    status: blocked_on_approval
+    output_id: <org-slug>-int-v1
+    unblock_conditions:
+      intelligence_launch_verdict: pending
+      base_model_decision: pending
+      source_governance: pending
+      dynamic_contract_snapshot: pending
+    model_plan:
+      base_model: null                # provisional candidate belongs here only after evidence
+      base_model_status: pending
+      provider: null
+      output_model: accounts/emanate/models/<org-slug>-int-v1
+      variant: intelligence
+      seed: 42
+      served_contract:
+        requirement: actual-dynamic-product-contract
+        snapshot_status: pending
+    training:
+      status: not_started
+      recipe_status: pending_s2_approval
+    champion:
+      model_id: null
+      baseline: production-intelligence
+    gates:
+      baselines: TBD-intelligence-baseline
+      structure: lexicographic
+    budget:
+      eval_window_cap_usd: null
+      train_all_in_cap_usd: null
+      stop_gate_usd: 100
+      # No auto_approve_under_usd unless Daniel sets it for this stream.
+    paths:
+      platform_repo: platform-alpha
+      dossiers_out: finetune-out/dossiers-<org-slug>/intelligence
+      corpus_out: finetune-out/corpora/<org-slug>/intelligence/v1
+      export_script: scripts/export-account-dossiers.ts

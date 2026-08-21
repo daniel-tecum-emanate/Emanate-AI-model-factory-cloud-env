@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentSpec",
+  "description": "factory-automation/product-integration/AGENT-CATALOG.md §A schema — the 11-section prompt anatomy, structured. One file per premade agent (PRs/model-factory-v1 T10).",
+  "type": "object",
+  "required": [
+    "slug", "role_family", "mission", "stages", "status", "spec_version",
+    "read_first", "mandate", "laws", "single_writer", "workspace",
+    "crash_resume", "outputs", "done_when", "final_response_shape",
+    "typical_count", "evidence_pointer"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "role_family": {
+      "type": "string",
+      "enum": [
+        "coordinator", "packager", "forensics", "platform", "eval-prep",
+        "builder", "reader", "expert-lens", "consolidator", "verifier",
+        "grader", "shadow"
+      ]
+    },
+    "mission": { "type": "string", "minLength": 1 },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["S1", "S2", "S3", "S4", "S5", "S6", "S6g", "S7", "S8", "S9", "S10", "S11", "cross-cut"]
+      }
+    },
+    "status": { "type": "string", "enum": ["draft", "reviewed"] },
+    "spec_version": { "type": "string", "pattern": "^v[0-9]+$" },
+    "read_first": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "items": { "type": "string" }
+    },
+    "mandate": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["task", "stop_or_ask"],
+        "additionalProperties": false,
+        "properties": {
+          "task": { "type": "string" },
+          "stop_or_ask": { "type": "string" }
+        }
+      }
+    },
+    "laws": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "single_writer": {
+      "type": "object",
+      "required": ["owns", "do_not_touch"],
+      "additionalProperties": false,
+      "properties": {
+        "owns": { "type": "array", "items": { "type": "string" } },
+        "do_not_touch": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["worktree", "branch_pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "worktree": { "type": "string" },
+        "branch_pattern": { "type": "string" },
+        "env_keys": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "crash_resume": {
+      "type": "object",
+      "required": ["report_first"],
+      "additionalProperties": false,
+      "properties": {
+        "report_first": { "type": "boolean" },
+        "resume_from_crash_fields": { "type": "array", "items": { "type": "string" } },
+        "paid": { "type": "boolean" }
+      }
+    },
+    "outputs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "done_when": { "type": "string", "minLength": 1 },
+    "final_response_shape": { "type": "string", "minLength": 1 },
+    "typical_count": { "type": "string", "minLength": 1 },
+    "evidence_pointer": { "type": "string", "minLength": 1 },
+    "addenda_channel": { "type": "string" },
+
+    "runtime": {
+      "description": "OPTIONAL (added 2026-07-27, factory-graph-pr1 B3). What this agent costs when factory_node_run.py dispatches it headlessly. Before this the schema had no budget/model field at all and `additionalProperties: false`, so the dispatch had nothing to resolve and the numbers would have had to hide in the wrapper. Absent = fall back to factory_node_run.ROLE_DEFAULTS for the role_family; every existing spec omits it and still validates. `allowed_tools` may not contain `Task` — nested spawn makes the parent's budget cap meaningless — and the dispatcher strips it defensively regardless of what is written here.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "enum": ["haiku", "sonnet", "opus"] },
+        "max_turns": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "budget_usd": { "type": "number", "minimum": 0, "maximum": 25 },
+        "allowed_tools": {
+          "type": "array",
+          "items": { "type": "string", "not": { "const": "Task" } }
+        },
+        "executor": {
+          "description": "OPTIONAL (added 2026-07-29, factory-cursor-bridge-v1 C2, decision D1; `self_dispatch` added 2026-08-20, model-factory-cloud-dispatch-v1 ENVIRONMENT.md §5). Which runtime dispatches this spec: `tier2` (default when absent — headless Claude Code via tier2_run.sh, unchanged), `cursor_sdk` (a Cursor agent via factory_cursor_dispatch.py — controllable from the product: Stop/Pause/Resume/Send-message), or `self_dispatch` (the ORCHESTRATING agent's own `Task` tool — for a runtime that structurally cannot hold CURSOR_API_KEY or a local `claude` CLI credential, e.g. the cloud-dispatch routine session; see factory_node_run.py's `_dispatch_self` docstring for the two-call pause/resume protocol this requires). Opting a spec in is a deliberate per-spec edit, never a flag-day default. NOTE the tradeoff, stated in factory_cursor_dispatch.py's docstring: the cursor_sdk path has NO max_turns/budget_usd enforcement — those two fields and allowed_tools apply to tier2 only. `self_dispatch`'s cost enforcement is weaker still: self-reported by the orchestrating agent, not independently metered — see `_dispatch_self`.",
+          "type": "string",
+          "enum": ["tier2", "cursor_sdk", "self_dispatch"]
+        },
+        "cursor_model": {
+          "description": "OPTIONAL in schema but REQUIRED in practice for cursor_sdk specs: the Cursor model slug to dispatch with (e.g. composer-2.5-fast). The SDK's Agent.create refuses to default the model (startup_error 'missing_model', observed 2026-07-29 grand-steel S4) — set it on every cursor_sdk spec. Free-form because Cursor's slug set changes faster than this schema.",
+          "type": "string"
+        },
+        "cursor_runtime": {
+          "description": "OPTIONAL, cursor_sdk executor only: `cloud` (default — runs on a Cursor-hosted VM against a fresh clone of origin, controllable from anywhere) or `local` (spawns on the dispatching machine; the per-dispatch fallback decision D2 anticipates for specs needing local-only resources).",
+          "type": "string",
+          "enum": ["local", "cloud"]
+        }
+      }
+    },
+
+    "context_sources": {
+      "description": "OPTIONAL (added 2026-07-27, factory-graph-pr1 B4). Run-kind-conditional reading, on top of — never instead of — `read_first`, which stays the always-on baseline. This is what lets a retrain inherit its predecessor's context (the digest, the last ship-gate rationale, the org's mixture history) while a first run is not handed dangling references to material that does not exist. Absent = behaves exactly as before.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "first_run": { "type": "array", "items": { "type": "string" } },
+        "retrain": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

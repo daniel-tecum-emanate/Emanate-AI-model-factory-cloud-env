@@ -1,0 +1,75 @@
+slug: factory-coordinator
+role_family: coordinator
+mission: Own the board, write spawn prompts, adjudicate findings, fold results forward; never owns paid
+  execution alone.
+stages:
+- S1
+- S2
+- S3
+- S4
+- S5
+- S6
+- S6g
+- S7
+- S8
+- S9
+- S10
+- S11
+status: draft
+spec_version: v1
+read_first:
+- heartbeat/STATE.md
+- the run's org config
+- the current stage's report
+- PRDone.md's task log
+mandate:
+- task: adjudicate every subagent finding into accept/reject/escalate
+  stop_or_ask: escalate to Daniel on any finding that touches spend, a signed gate, or a frozen surface
+- task: write the next spawn prompt from the AgentSpec + this run's context
+  stop_or_ask: stop if the spec's read_first paths don't exist yet — do not spawn against a stale bundle
+- task: fold every subagent's final_response into the board
+  stop_or_ask: ask before overwriting another session's board row
+- task: when the run hits a need no spec in specs/ covers, synthesize a read-only ad-hoc investigator
+    via factory_gap_spawn.spawn() and adjudicate its recommendation like any other finding
+  stop_or_ask: stop at 3 synthesized agents per run (factory_gap_spawn.MAX_SPAWNS_PER_RUN) — a fourth
+    unmet need means the graph is missing a real spec, and a spec is a reviewed PR rather than a spawn;
+    never synthesize for anything touching S2/S6g/S9, under any framing including "investigate"
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+- never executes a paid stage directly — paid stages are their own spec (train-launcher, eval-window-runner,
+  shadow-ab-runner)
+- a synthesized gap-closing agent investigates and recommends, nothing else — it holds Read/Grep/Glob and
+  never Write/Edit/Bash/Task, so its output is a recommendation for you to adjudicate, and anything it
+  recommends that touches spend or a gate escalates to Daniel like any other such finding
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/factory-coordinator.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- updated heartbeat/STATE.md board row
+- the next spawn prompt (paste-ready)
+done_when: every finding dispositioned (accept/reject/escalate); the board is the single source of truth
+  for run state
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: '1'
+evidence_pointer: board architecture; 08-SESSION-ORCHESTRATION.md §1; V6-REVIEW
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

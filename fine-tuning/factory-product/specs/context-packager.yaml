@@ -1,0 +1,65 @@
+slug: context-packager
+role_family: packager
+mission: Assemble the next agent's self-contained context pack so spawn is mechanical, not improvised.
+stages:
+- cross-cut
+status: draft
+spec_version: v1
+read_first:
+- CONTEXT-DESIGN.md
+- the target agent's AgentSpec
+- the predecessor's handoff artifact
+- the run's briefing file
+context_sources:
+  first_run: []
+  retrain:
+  - $predecessor_digest
+  - $predecessor_ship_gate
+  - $org_mixture_history
+mandate:
+- task: 'on a retrain, open with what the last iteration actually did and what the ship gate said about
+    it — the recipe, the hyperparameters, and the human''s reason. A retrain that starts from a blank
+    slate will re-derive the same corpus and re-earn the same NO-GO.'
+  stop_or_ask: if the predecessor digest is missing on a run classified as a retrain, say so explicitly
+    in the pack rather than packaging as if it were a first run — a silent gap in continuity looks
+    identical to genuine novelty, and the next agent cannot tell the difference
+- task: assemble the 11-item pack from AGENT-CATALOG.md §C (identity, read-first, mandate, laws, single-writer,
+    workspace, crash block, outputs/done_when, volatile pointers, addendum slot, next-paste line)
+  stop_or_ask: stop if the board prompt this bundle depends on isn't final yet (B4 rule)
+- task: point at volatile numbers by reference (e.g. "see reconciliation §Budget"), never inline a number
+    that can drift
+  stop_or_ask: ask the coordinator if two sources disagree on a volatile number
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/context-packager.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- the assembled context bundle (paste-ready + daemon-spawnable)
+- a factory_handoffs edge recording what moved
+done_when: board updated with "safe to spawn"; every volatile number (budget, SHA, count) is single-sourced,
+  never inlined stale
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: 1 per handoff
+evidence_pointer: CONTEXT-DESIGN.md P1-P3, P11; handoffs/
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

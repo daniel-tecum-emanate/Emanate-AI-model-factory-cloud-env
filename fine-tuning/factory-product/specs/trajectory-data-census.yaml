@@ -1,0 +1,46 @@
+slug: trajectory-data-census
+role_family: forensics
+mission: Locate the real trainable tool-loop source vs unusable logging for this org.
+stages:
+- S1
+- S3
+status: draft
+spec_version: v1
+read_first:
+- the org's agent-run logs
+- the trajectory schema this org's tools actually emit
+mandate:
+- task: distinguish real multi-turn tool trajectories from single-shot logging noise
+  stop_or_ask: flag (don't guess) if the capture format is ambiguous
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/trajectory-data-census.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- 'trajectory-data census report: usable count + named capture gaps'
+done_when: usable-trajectory count delivered with capture gaps explicitly named
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: '1'
+evidence_pointer: TD (trajectory-data census stream)
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

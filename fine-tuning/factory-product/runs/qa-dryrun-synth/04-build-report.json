@@ -1,0 +1,139 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "build",
+  "stage_index": 4,
+  "generated_at": "2026-07-28T22:56:00+00:00",
+  "status": "todo",
+  "dry_run": true,
+  "heldout_anchor": {
+    "sealed": false,
+    "iteration": 1,
+    "why_it_matters": "No held-out set was sampled before curation, so any paired-eval number for this iteration is measured on data the curator could see. Seal one before S4 via factory_heldout.seal()."
+  },
+  "work_order": {
+    "recipe": "V5-ARCHITECTURE.md corpus shape: 45% replay / 35% real tool trajectories / 20% specialist (by loss-bearing tokens, +-5pp)",
+    "org_inputs": {
+      "dossiers": "finetune-out/dossiers-qa-dryrun-synth",
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "system_prompt": "buildSystemPrompt(allowedActions, customActions)",
+      "inventory_tool": "query_inventory",
+      "custom_watch_items": [
+        "flag-for-human-review"
+      ],
+      "seed": 42
+    },
+    "slices": {
+      "replay": true,
+      "real_trajectories": false,
+      "specialist": true,
+      "factual_qa": "full"
+    },
+    "variant_notes": "full QA dose + behavioral + trajectories",
+    "style_caps": "semantic class <=5-7% | skeleton cluster <=1-2% | unpaired decisive <=2-3% | >=2:1 off-mode:on-mode",
+    "state_conditioning": "Ground/Scope/Decline via <state> section inside the single position-0 system message",
+    "reference_chain_ptc": "cd platform-alpha-v5/scripts/v5 && python3 generate-anchor.py && python3 generate-a1-postcutoff.py && python3 generate-a2-citecount.py && python3 generate-a3-fieldunavail.py && python3 generate-a4-fabricated.py && python3 generate-a5-triage.py && python3 select-v5-slices.py && python3 mixture-and-assemble-v5.py --write",
+    "hard_rules": [
+      "SEED-deterministic; regeneration command + script git SHA registered in DATASETS.md (a dataset that can't be regenerated doesn't exist)",
+      "over-generate ~2x -> deterministic select; regenerate-never-repair (L18/L19)",
+      "eval-key disjointness: diff vs EVAL_RESERVED + auditLeakage, print the diff in the report (L33)",
+      ">=1/3 of every gate's members held OUT of training (L39)",
+      "no unmarked closed-book value-QA (L40 / D-MEM-01)"
+    ]
+  },
+  "nodes": [
+    {
+      "node_id": "S4:corpus-planner",
+      "spec": "corpus-planner",
+      "role_family": "builder",
+      "runtime": {
+        "model": "sonnet",
+        "max_turns": 30,
+        "budget_usd": 2.0
+      },
+      "allowed_tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "Edit",
+        "Bash"
+      ],
+      "dry_run": true,
+      "dispatched": false,
+      "ok": true,
+      "verdict": null,
+      "note": "dry-run: prompt rendered and argv resolved, nothing spawned, $0"
+    },
+    {
+      "node_id": "S4:corpus-family-generator",
+      "spec": "corpus-family-generator",
+      "role_family": "builder",
+      "runtime": {
+        "model": "sonnet",
+        "max_turns": 30,
+        "budget_usd": 2.0
+      },
+      "allowed_tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "Edit",
+        "Bash"
+      ],
+      "dry_run": true,
+      "dispatched": false,
+      "ok": true,
+      "verdict": null,
+      "note": "dry-run: prompt rendered and argv resolved, nothing spawned, $0"
+    },
+    {
+      "node_id": "S4:corpus-reader",
+      "spec": "corpus-reader",
+      "role_family": "reader",
+      "runtime": {
+        "model": "haiku",
+        "max_turns": 15,
+        "budget_usd": 0.5
+      },
+      "allowed_tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "Edit",
+        "Bash"
+      ],
+      "dry_run": true,
+      "dispatched": false,
+      "ok": true,
+      "verdict": null,
+      "note": "dry-run: prompt rendered and argv resolved, nothing spawned, $0"
+    },
+    {
+      "node_id": "S4:curation-consolidator",
+      "spec": "curation-consolidator",
+      "role_family": "consolidator",
+      "runtime": {
+        "model": "sonnet",
+        "max_turns": 20,
+        "budget_usd": 1.0
+      },
+      "allowed_tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "Edit",
+        "Bash"
+      ],
+      "dry_run": true,
+      "dispatched": false,
+      "ok": true,
+      "verdict": null,
+      "note": "dry-run: prompt rendered and argv resolved, nothing spawned, $0"
+    }
+  ],
+  "todo_v1": "parameterize the v5 generator chain into an org-generic package (generators read org config, not PTC constants)",
+  "next": "verify"
+}

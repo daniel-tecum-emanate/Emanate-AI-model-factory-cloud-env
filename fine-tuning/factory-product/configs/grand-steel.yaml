@@ -1,0 +1,182 @@
+# Factory per-org config — Grand Steel (customer #2 candidate, first automation test)
+# Numbers sourced from company-brain/3-execution/reports/GS1-grand-steel-readiness.md (2026-07-14, read-only census)
+# and ORG-READINESS-CENSUS-2026-07-14.md. Point-in-time snapshots — re-census before any paid stage.
+
+org:
+  slug: grand-steel
+  id: 10664bd2-79d2-49d2-8196-fcaf539d9eb3
+  name: Grand Steel
+  customer_status: CONTRACTED    # confirmed by Daniel 2026-07-29 — real customer, standard product ToS covers data use
+
+book:  # from GS1 report, 2026-07-14
+  accounts: 327
+  fact_bearing_accounts: 61          # orders or revenue > 0 (18.7%)
+  zero_order_accounts: 266
+  book_revenue_usd: 112751           # ~4 orders of magnitude below PTC ($892M)
+  transcripts: 326
+  reviews: 2917
+  runs_total: 2928
+  usable_runs: 2888                  # emit + >=1 non-emit tool call (98.6%)
+  actionable_runs: 789               # non-no_action emits (28.3%)
+  reviews_with_trajectory_id: 422    # all post-2026-07-10
+
+census:
+  tier: A                            # full stack: accounts + transcripts + reviews
+  axis_verdict: behavioral-dominant  # GS1: real Tier-A on the AGENT/BEHAVIORAL axis; factual axis anomalously thin
+  census_doc: company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md
+  readiness_report: company-brain/3-execution/reports/GS1-grand-steel-readiness.md
+
+model_plan:
+  base_model: accounts/fireworks/models/qwen3p6-27b
+  output_model: accounts/emanate/models/grand-steel-v1-agent
+  variant: behavioral-dominant       # thin factual book -> trajectory/behavioral-heavy corpus
+  # S4 blocker decisions — Daniel, 2026-07-29 (via coding session; ledger rows under
+  # run 523ecbbf-e049-405f-8354-779e2cd40307, node S4:corpus-family-generator):
+  corpus_mixture_first_train:        # blocker 1: V5's 45% replay assumes an org champion; GS has none
+    replay_pct: 15                   # reshaped 45/35/20 -> 15/50/35 for THIS FIRST TRAIN ONLY
+    real_trajectories_pct: 50
+    specialist_pct: 35
+    scope: first-train-only          # revert to the V5 shape once a GS champion exists to replay from
+  # REVISED 2026-07-29 ~23:27 PT (ledger c0f95d84, supersedes b382548c "probe"): the probe is
+  # blocked at 2/40 by the Anthropic usage cap (V-107, resets 08-01) and Daniel said "forget
+  # the cap if it is a blocker". 1b seeds borrow PTC's shapes as an EXPLICITLY
+  # UNVALIDATED-FOR-GS template; the resumed probe's real seeds replace/validate them before
+  # iteration 2. The 2 real probe trajectories already collected stay in as evidence.
+  counterfactual_seeds: borrow-ptc-shapes-unvalidated
+  build_go_ahead: confirmed          # Daniel 2026-07-29: build family 1a against the 325 real dossiers (governance CLEARED above)
+  slices:
+    replay: true                     # requires a replay teacher; first train has no org champion -> untuned-base replay only
+    real_trajectories: true          # ~150-250 after D3-style selection (per-account cap, no_action <=20%)
+    specialist: true                 # counterfactual Ground/Scope/Decline pairs on GS book
+    factual_qa: floor-only           # 61 x ~40 + 266 x ~10 ~= 5,100 pairs; entity-anchoring priority (revenue clustering $42-$14K)
+  qa_pairs_estimate: 5100
+  trajectory_selection_estimate: [150, 250]
+  seed: 42
+  inventory_tool: query_inventory    # SteelAPI org (NOT Oracle's match_inventory)
+  custom_watch_items: [flag-for-human-review, high-signal-to-expand]
+  system_prompt_source: buildSystemPrompt(allowedActions, customActions)  # NOT stored in transcripts; reconstruct
+
+training:  # frozen don't-disturb list (V5-ARCHITECTURE) — org-agnostic
+  lora_rank: 32
+  lora_alpha: 32
+  learning_rate: 3.0e-6
+  epochs: 1
+  weight_decay: 0.0
+  target_modules: all-linear
+
+champion:
+  model_id: null                     # first train: no org champion; v3/v5 belong to PTC and never transfer
+  baseline: frontier-agent           # eval-all.ts --baseline vs the org's current serving model (claude-sonnet-5 agent)
+
+gates:
+  # PTC gate baselines DO NOT transfer. L41: baseline every gate on the incumbent
+  # (here: frontier baseline) BEFORE training, from this org's own book.
+  baselines: TBD-first-baseline-run
+  structure: lexicographic           # Gate1 invariants 0-margin -> Gate2 specialists <=2pp -> Gate3 conversational -> Gate4 operational
+
+budget:
+  ptc_reference_tokens_per_epoch: 3998200   # Fireworks estimatedTokenCount for combined-train-v4d-agent (35,778 rec)
+  # REPROJECTED TWICE on 2026-07-30 (MF-FINETUNE-EXEC, run 523ecbbf):
+  # (1) pre-upload tiktoken estimate: 2,626,352 tiktoken /1.95 (the recorded PTC
+  #     calibration) = 1,346,847 -> fraction 0.3369 -> $29.56 -> S6g auto-approved.
+  # (2) POST-UPLOAD PLATFORM TRUTH (L6/L22: platform number wins): Fireworks
+  #     estimatedTokenCount = 3,069,300 for the READY dataset — the /1.95 ratio
+  #     does NOT hold for this corpus shape (tool-schema-heavy JSON; ratio came
+  #     out 0.86, not 1.95). Fraction = 3,069,300/3,998,200 = 0.7677 ->
+  #     projection $48.18 total — ABOVE the $30 auto-approve, so the launch gate
+  #     returned to Daniel per policy design. Decomposition + realistic-vs-formula
+  #     spread in reports/GS-FINETUNE-EXEC.md §3. The prior policy approval
+  #     (basis $29.56) was moved aside as superseded, not deleted.
+  token_volume_fraction_of_ptc: 0.7677      # PLATFORM-measured (upload 2026-07-30 12:56 PT)
+  sft_rate_usd_per_m: 3.00                  # Fireworks LoRA-SFT 16.1B-80B tier
+  dual_bucket_multiplier: 2.0               # L34: real all-in ~= 2x estimatedCost
+  projection_calibration: 1.3               # RUNBOOK #6: projections under-predict ~1.3x
+  unroll_multiplier: 1.386                  # L22: multi-turn trajectories unroll
+  eval_window_cap_usd: 15
+  train_all_in_cap_usd: 35                  # GS1 projection: $25-35/cycle all-in
+  stop_gate_usd: 100                        # inherited hard stop (v4 precedent: >$100 -> halt, Daniel approves)
+  # Daniel 2026-07-29 ("provide the option to allow auto allow under set budget
+  # constraints and allow this run to do so"): S6g auto-approves BY POLICY at or
+  # under this number. $30 covers the current $22.56 calibrated projection with
+  # margin while staying under train_all_in_cap_usd — anything above $30 still
+  # waits for Daniel, and the over-cap refusal at $35+ is untouched (L17).
+  auto_approve_under_usd: 30
+
+governance:
+  # Cleared by Daniel 2026-07-29 (verbal, this session — same basis as PTC Steel: standard
+  # product-usage/ToS terms already cover training on account/transcript/review data we
+  # generated servicing the account, no separate per-org data-sharing agreement needed).
+  # Recorded via `factory.py grand-steel --stage governance --approved` for the audit trail
+  # (record_approval + _record_gate_decision), not just this file edit — see factory_gate_decisions.
+  data_use_clearance: CLEARED
+  dpa_signed: true
+  training_rights_clause: true
+  pii_egress_cleared: true           # tool_result PII redaction path proven out on PTC; same pipeline applies here
+  permitted_uses: [retrieval, eval, sft, preference, research]
+
+serving:
+  mode: undecided                    # multi-LoRA shared deployment vs dedicated — decide at S10 per SERVING-RESEARCH-2026-07 §7.3
+  activation_table: org_custom_models
+  min_accelerators: 2                # ~$14/hr active, scale-to-zero $0 idle, ~3.5min cold start
+
+paths:
+  platform_repo: platform-alpha      # relative to workflow repo root (worktrees platform-alpha-v5 etc. are siblings under the same root)
+  dossiers_out: finetune-out/dossiers-grand-steel
+  export_script: scripts/export-account-dossiers.ts
+
+# Additive second stream. The top-level blocks above remain the byte-for-byte
+# per-account contract for active run 523ecbbf-e049-405f-8354-779e2cd40307.
+model_plans:
+  intelligence:
+    status: blocked_on_approval
+    output_id: grand-steel-int-v1
+    unblock_conditions:
+      intelligence_launch_verdict: pending
+      base_model_decision: pending
+      oracle_chat_source_governance: pending
+      dynamic_contract_snapshot: pending
+    model_plan:
+      base_model: Qwen/Qwen3.6-35B-A3B
+      base_model_status: provisional_pending_approval
+      provider: together
+      output_model: accounts/emanate/models/grand-steel-int-v1
+      variant: intelligence-adapt-only
+      seed: 42
+      served_contract:
+        requirement: actual-dynamic-grand-steel-oracle-contract
+        incumbent_model: gpt-5.6
+        api: responses
+        tool_count_unrestricted: 10
+        dynamic_tool: search_inventory
+        matching_pack: grandsteel-coil-tag
+        matching_pack_version: 1
+        historical_int_v1_three_tool_contract_valid: false
+        snapshot_status: pending_provider_boundary_capture
+    training:
+      provider: together
+      method: managed-lora
+      status: not_started
+      recipe_status: pending_s2_approval
+      serving_mode: dedicated-dmi-window
+    champion:
+      model_id: null
+      baseline: production-intelligence
+      incumbent_model: gpt-5.6
+    gates:
+      baselines: TBD-intelligence-baseline
+      structure: lexicographic
+      s2_requires:
+        - shared-org-governance-reattestation
+        - intelligence-architecture-approval
+        - dynamic-10-tool-contract-snapshot
+        - prior-int-v1-launch-verdict
+    budget:
+      eval_window_cap_usd: null
+      train_all_in_cap_usd: null
+      stop_gate_usd: 100
+      # Deliberately no auto_approve_under_usd: per-account policy never inherits.
+    paths:
+      platform_repo: platform-alpha
+      dossiers_out: finetune-out/dossiers-grand-steel/intelligence
+      corpus_out: finetune-out/corpora/grand-steel/intelligence/v1
+      export_script: scripts/export-account-dossiers.ts

@@ -1,0 +1,74 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "verify",
+  "stage_index": 5,
+  "generated_at": "2026-07-28T06:22:04+00:00",
+  "status": "ok",
+  "dry_run": true,
+  "policy": "hard fail-stop: any check fails -> stop, write report, regenerate at the root (never repair in place)",
+  "battery": [
+    {
+      "check": "deterministic corpus verifier (100% coverage: verbatim grounding, masks, weights, caps, probe guard)",
+      "command": "python3 scripts/v5/verify-v5-corpus.py",
+      "catalog": "#1",
+      "script_on_disk": true
+    },
+    {
+      "check": "contradiction linter \u2014 0 unmarked (MANDATORY, L37)",
+      "command": "python3 scripts/qa-contradiction-lint.py --corpus finetune-out/together-export/combined-train-qa-dryrun-synth-v1.jsonl --gate",
+      "catalog": "#2",
+      "script_on_disk": true
+    },
+    {
+      "check": "shortcut hunt (position bias, counter-instances, cue separation, sibling eff-lb ratios)",
+      "command": "V5-SHORTCUT-CHECK pattern \u2014 mechanize per corpus",
+      "catalog": "#3",
+      "script_on_disk": null
+    },
+    {
+      "check": "reserved-key / leakage diff vs EVAL_RESERVED",
+      "command": "python3 scripts/v5/reserved-diff-v5.py",
+      "catalog": "#4",
+      "script_on_disk": true
+    },
+    {
+      "check": "style-concentration detector (top-1 opening >=30% / top-3 >=60% / length CV <=0.20)",
+      "command": "python3 scripts/preflight/style_concentration.py --self-test",
+      "catalog": "#29",
+      "script_on_disk": true
+    },
+    {
+      "check": "render-verify pre-upload (masks correct on the EXACT Fireworks renderer, qwen3_6)",
+      "command": "python3 scripts/v5/render-verify-upload.py",
+      "catalog": "runbook B.9-10",
+      "script_on_disk": true
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "S5:preflight-linter",
+      "spec": "preflight-linter",
+      "role_family": "verifier",
+      "runtime": {
+        "model": "sonnet",
+        "max_turns": 25,
+        "budget_usd": 1.5
+      },
+      "allowed_tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "Edit",
+        "Bash"
+      ],
+      "dry_run": true,
+      "dispatched": false,
+      "ok": true,
+      "verdict": null,
+      "note": "dry-run: prompt rendered and argv resolved, nothing spawned, $0"
+    }
+  ],
+  "todo_v1": "generalize PTC's v5 scripts to read the org config; run them here directly and parse pass/fail",
+  "next": "project"
+}

@@ -1,0 +1,13 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "export",
+  "stage_index": 3,
+  "generated_at": "2026-07-28T06:22:04+00:00",
+  "dry_run": true,
+  "wraps": "platform-alpha/scripts/export-account-dossiers.ts (--org bypasses the enabled gate; no LLM; $0)",
+  "command": "npx tsx --env-file=.env.local scripts/export-account-dossiers.ts --org 00000000-0000-4000-8000-000000000001 --out finetune-out/dossiers-qa-dryrun-synth",
+  "cwd": "/Users/danieltecum/emanate-tecum-workflow/platform-alpha",
+  "expected_output": "100 dossiers in finetune-out/dossiers-qa-dryrun-synth/ (gitignored \u2014 customer data never committed)",
+  "status": "ok",
+  "next": "build"
+}

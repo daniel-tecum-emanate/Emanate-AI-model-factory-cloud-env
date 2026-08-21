@@ -1,0 +1,142 @@
+# Factory per-org config — PTC Steel (customer #1, v6 retrain through the factory)
+# Created 2026-07-30 by MF-PTC-RETRAIN-EXEC (PRs/ptc-retrain-v6/AGENT-PROMPT.md Phase 2.1).
+# Book numbers are point-in-time snapshots from the recorded censuses cited per block —
+# S1's own v1 TODO (live re-census) still applies; re-verify before any paid stage.
+# PTC's real v1-v5 history is backfilled in factory_runs (v5 via runs/ptc-steel/
+# backfill_v5_run.py, 2026-07-30); the v6 run inherits v5's E21 no-go digest.
+
+org:
+  slug: ptc-steel
+  id: 01a4c1ae-4a25-4cdc-9883-dea0827c9ce3   # prod org_id (GS1-grand-steel-readiness.md; PRs/intv1-runpod-shadow/PRContext.md)
+  name: PTC Steel
+  customer_status: CONTRACTED                 # customer #1 (ORG-READINESS-CENSUS-2026-07-14.md)
+
+book:  # ORG-READINESS-CENSUS-2026-07-14.md + GS1 readiness PTC@iteration-3 column + reports/B-qa-dataset.md
+  accounts: 1031                    # ORG-READINESS 07-14
+  fact_bearing_accounts: 330        # accounts with order history (B-qa-dataset.md per-org census)
+  zero_order_accounts: 701          # 1031 - 330
+  book_revenue_usd: 892000000       # GS1 PTC column: book $892M, max acct $68.6M, 23 accts >= $10M
+  transcripts: 1031                 # ORG-READINESS 07-14
+  reviews: 10356                    # ORG-READINESS 07-14 (GS1 PTC column agrees)
+  runs_total: 10433                 # DERIVED: GS1 "13,361 runs (PTC+GS pool)" minus GS's 2,928 — re-census at S3
+  usable_runs: 4605                 # DERIVED: GS1 "7,493 usable (PTC+GS)" minus GS's 2,888 — re-census at S3
+  actionable_runs: 3965             # DERIVED: ~38% non-no_action (v3-era census "~62% no_action") — re-census at S3
+  reviews_with_trajectory_id: 12752 # filtered S4 selection pool, 2026-07-31
+
+census:
+  tier: A                            # full stack: accounts + transcripts + reviews (customer #1)
+  axis_verdict: full                 # fact share 330/1031 = 0.32 >= 0.25 AND real Tier-A behavioral pool
+  census_doc: company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md
+  readiness_report: company-brain/3-execution/MIXTURE-HISTORY.md   # the v1-v5 attribution ledger IS PTC's readiness record
+
+model_plan:
+  base_model: accounts/fireworks/models/qwen3p6-27b   # program standard v2-v5; brief: keep unless the Phase 0 audit argues otherwise
+  output_model: accounts/emanate/models/ptc-steel-v6-agent
+  variant: full                      # factual axis real at PTC scale, but L40/D-MEM-01 stands: NO closed-book value QA
+  # v6 corpus mixture — per the retrain brief (AGENT-PROMPT.md Phase 2.3): GS shape
+  # as PRIOR (real-heavy), doses re-derived at S4 from PTC's own failure data.
+  # Replay GENERATION recipe = V5-ARCHITECTURE (v3-on-policy + untuned-base) since
+  # PTC has a champion to replay from — the recipe governs HOW replay is made, the
+  # GS-prior governs its share. The v6 fixes: (a) E21 must-call twins paired with
+  # every staged-evidence record + a printed must-call census (>=1:1 for the four
+  # core reads; the new query_account_orders read tracks its measured 18.2% demand
+  # to avoid 5.5x over-calling); (b) doses re-derived from v3's residual
+  # gaps (refusal-rehab 72.5 / positive_today 83.3 / triage 60 — V6-ARCHITECTURE §0
+  # numbers of record, Phase 0 audit re-verifies); (c) envelope refreshed from
+  # CURRENT production — the deployed re-anchor is 272c7c5e… (origin/main
+  # 790217b17, 5 awareness reads, no importance_score, optional renewal);
+  # f713a1a6… is the Intelligence contract and is forbidden here. Corpus records
+  # render against the current live product bytes, never a frozen local copy.
+  # CONSUME the V6-ARCHITECTURE machinery where built (it is the TEMPLATE per
+  # D-BASE-01's own resolution): the three §5.5 linters (shallow-probe <=0.70,
+  # envelope-hash call-prior, gold-integrity) armed on v5's corpus; the two-sided
+  # routing gates (§7A); the E21 745-scenario standing tally.
+  corpus_mixture_v6:
+    replay_pct: 15                   # GS-prior share; v3-on-policy + untuned-base split per V5-ARCHITECTURE at S4
+    real_trajectories_pct: 50        # real-heavy prior (B4 3-tool + Slice-4 8-tool native-envelope pool, re-selected)
+    specialist_pct: 35               # counterfactuals + E21 must-call twins (the v6 fix lives here)
+    scope: v6-retrain                # doses in lb-tokens re-derived at S4 (L38 falsified: never carry a dose curve forward)
+  slices:
+    replay: true                     # PTC HAS a champion (v3) — v3-on-policy + untuned-base per V5-ARCHITECTURE
+    real_trajectories: true
+    specialist: true
+    factual_qa: none                 # D-MEM-01 A' + L40: facts live in tools; zero closed-book value emission
+  qa_pairs_estimate: 0
+  trajectory_selection_estimate: [300, 400]
+  seed: 42
+  inventory_tool: match_inventory    # Oracle org (template rule: Oracle default; SteelAPI orgs use query_inventory)
+  custom_watch_items: []             # PTC has 0 custom actions (GS1 org-config comparison row)
+  system_prompt_source: buildSystemPrompt(allowedActions, customActions)  # pull CURRENT served prompt + tool schemas fresh at S4
+
+training:  # FROZEN don't-disturb list (V5-ARCHITECTURE) — change only via a Daniel-signed decision
+  lora_rank: 32
+  lora_alpha: 32
+  learning_rate: 3.0e-6
+  epochs: 1                          # v4 proved epoch 2 overfits; v5 + grand-steel confirmed 1ep
+  weight_decay: 0.0
+  target_modules: all-linear
+
+champion:
+  model_id: ptc-steel-v3-agent       # the org's OWN champion since iteration 3 (MIXTURE-HISTORY §1.1)
+  baseline: frontier-agent           # production serving model (Claude) — v6 shadow-compares against BOTH via AB-SHADOW
+
+gates:
+  # L41: re-baseline v3 (champion) AND the frontier incumbent on the v6 eval battery
+  # BEFORE training — v3's recorded gate levels are GRADER-FIX-2-corrected and eval
+  # batteries have changed since; do not reuse stale baselines.
+  baselines: TBD-rebaseline-before-train
+  structure: lexicographic           # Gate1 invariants 0-margin -> Gate2 specialists <=2pp -> Gate3 conversational -> Gate4 operational
+  # Standing pre-launch gate (E21): the behavioral must-call tally (745-scenario
+  # class) runs BEFORE any launch; recited-without-calling must be ~0 like v3, and
+  # the corpus must print a must-call census >= 1:1.
+
+budget:
+  ptc_reference_tokens_per_epoch: 3998200    # Fireworks estimatedTokenCount for combined-train-v4d-agent (the reference unit)
+  # v6 SIZING GOAL (Daniel: the retrain must be MORE EFFICIENT and able to replace
+  # the production model): v5 trained 11.36M platform tokens (2.84x ref) for $81.68
+  # real. v6 targets a LEANER corpus — fraction estimate 1.0x ref (~4M platform
+  # tokens) from the corpus plan; the S6 projection is re-measured from the
+  # assembled corpus and RE-CHECKED against the platform's estimatedTokenCount
+  # after upload (GS lesson: tiktoken calibration missed 2.28x on tool-schema-heavy
+  # corpora — platform token counts gate, estimates don't).
+  # S6 platform truth: Fireworks dataset ptc-steel-v6-s4-ac6a6078 READY with
+  # estimatedTokenCount=26,888,400 over 3,639 records. This is 6.725126× the
+  # 3,998,200 reference; the repeated 8,656-char system + 9-tool schemas make
+  # lb-token sizing radically understate platform tokens. Hard-stop projection
+  # now applies; never replace this with the earlier 1.0× plan estimate.
+  token_volume_fraction_of_ptc: 6.725126306838077
+  sft_rate_usd_per_m: 3.00
+  dual_bucket_multiplier: 2.0        # L34
+  projection_calibration: 1.3        # RUNBOOK #6
+  unroll_multiplier: 1.386           # L22
+  eval_window_cap_usd: 15
+  train_all_in_cap_usd: 85           # beat v5's $81.68 real all-in — efficiency is a stated goal of this retrain
+  stop_gate_usd: 100                 # program hard stop (v4 precedent) — raise only with Daniel's explicit approval
+  # Brief (AGENT-PROMPT.md Phase 2.1): $30 auto-approve unless Daniel says otherwise.
+  # Anything above waits for Daniel (Model Factory tab gate card / validation queue);
+  # the L17 over-cap refusal is untouched. Never weaken a verifier or projection to
+  # squeeze under this number.
+  auto_approve_under_usd: 30
+
+governance:
+  # PTC's data-use posture is long established: five real fine-tune iterations
+  # (v1-v5, 2026-07-10..07-18) trained on PTC account/transcript/review data under
+  # the standard product-usage/ToS basis — grand-steel.yaml's own governance block
+  # cites PTC as THE precedent ("same basis as PTC Steel"). PII egress path
+  # (tool_result redaction) was proven out ON PTC. S2 still runs as a human gate:
+  # approval via the Model Factory tab gate card or Daniel's --approved.
+  data_use_clearance: CLEARED
+  dpa_signed: true
+  training_rights_clause: true
+  pii_egress_cleared: true
+  permitted_uses: [retrieval, eval, sft, preference, research]
+
+serving:
+  mode: undecided                    # decide at S10 per SERVING-RESEARCH-2026-07 §7.3; A/B shadow (AB-SHADOW lane) comes FIRST
+  activation_table: org_custom_models
+  min_accelerators: 2
+
+paths:
+  platform_repo: platform-alpha
+  dossiers_out: finetune-out/dossiers-pilot   # PTC dossiers already exist on disk (GS1 §4: "dossiers-pilot/ (1,029) exists") — S3 re-export refreshes
+  export_script: scripts/export-account-dossiers.ts

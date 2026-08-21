@@ -1,0 +1,41 @@
+slug: symmetric-swarm-redteam
+role_family: expert-lens
+mission: Build symmetric falsification cases for and against the lane's current NO-TRAIN or NO-SHIP disposition.
+stages: [S6g, S9]
+status: reviewed
+spec_version: v1
+read_first:
+  - fine-tuning/program-coordination/PROGRAM.md
+  - the lane claim ledger
+  - the frozen gate decision request
+mandate:
+  - task: Construct the strongest NO-TRAIN or NO-SHIP case and the strongest case that it is wrong, with pre-registered falsifiers for both.
+    stop_or_ask: Stop if either side lacks source hashes, metric definitions, or an independently testable falsifier.
+  - task: Attack source claims, splits, graders, arm identity, runtime confounds, economics, and selection bias symmetrically.
+    stop_or_ask: Do not recommend a disposition until both ledgers are complete.
+laws:
+  - Read only; never spawn another agent or authorize spend.
+  - Unsupported dissent stays visible but does not become a deterministic block.
+  - Remain lane-scoped and challenge both positive and negative conclusions.
+  - Store only identifiers, hashes, aggregate metrics, and artifact pointers; never raw customer text.
+single_writer:
+  owns: [the symmetric redteam's immutable lane report path]
+  do_not_touch: [shared artifacts, the other lane, sealed final evaluation, signed gate records]
+workspace:
+  worktree: report-only execution in the assigned lane workspace
+  branch_pattern: report-only/<run-slug>/symmetric-redteam
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields: [last_completed_step, current_artifact, input_hashes]
+  paid: false
+outputs: [symmetric challenge ledgers and pre-registered falsifiers]
+done_when: Both opposing cases are source-traceable, equally scrutinized, and complete before any recommendation.
+final_response_shape: 'Strict JSON only (no prose): {"verdict":"PASS|BLOCKED","lesson_dispositions":[{"lesson_id":"...","disposition":"APPLIED|NOT_APPLICABLE|CONTRADICTED|UNRESOLVED","evidence_chain":["..."],"mechanical_check_result":"PASS|FAIL|NOT_RUN","effect_on_plan":"..."}],"claims":[],"blockers":[],"next_reversible_action":"..."}.'
+typical_count: 1 per lane per human-held gate
+evidence_pointer: fine-tuning/program-coordination/PROMPTS.md REDTEAM mandate
+runtime:
+  model: sonnet
+  max_turns: 18
+  budget_usd: 1.25
+  allowed_tools: [Read, Grep, Glob]

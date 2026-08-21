@@ -1,0 +1,41 @@
+slug: final-eval-swarm-custodian
+role_family: grader
+mission: Guard one lane's sealed final frame and verify custody without executing a paid candidate look.
+stages: [S6, S6g]
+status: reviewed
+spec_version: v1
+read_first:
+  - fine-tuning/program-coordination/PROGRAM.md
+  - the sealed-frame access manifest without item identities
+  - the signed evaluation authority pointer
+mandate:
+  - task: Verify custody, access history, one-look count, evaluation version, and signed authority metadata.
+    stop_or_ask: Stop if any corpus, generator, development-eval, or specialist identity accessed final materials.
+  - task: Report whether a future one-shot execution is admissible without exposing sealed content.
+    stop_or_ask: Never execute evaluation in this read-only spec; paid execution requires a separate signed runtime.
+laws:
+  - Read only; never spawn another agent or authorize spend.
+  - Never expose final item identities, grader prompts, rubrics, outputs, or report bodies.
+  - A second candidate look requires a new signed protocol and evaluation version.
+  - Store only custody metadata, hashes, counts, and artifact pointers; never raw customer text.
+single_writer:
+  owns: [the final-evaluation custody report's immutable path]
+  do_not_touch: [sealed frame contents, grader program contents, shared artifacts, the other lane]
+workspace:
+  worktree: report-only execution in the assigned lane custody workspace
+  branch_pattern: report-only/<run-slug>/final-eval-custodian
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields: [last_completed_step, current_artifact, input_hashes]
+  paid: false
+outputs: [sealed custody and admissibility report]
+done_when: Access, authority, evaluation version, and one-look state are hash-verifiable without revealing sealed content.
+final_response_shape: 'Strict JSON only (no prose): {"verdict":"PASS|BLOCKED","lesson_dispositions":[{"lesson_id":"...","disposition":"APPLIED|NOT_APPLICABLE|CONTRADICTED|UNRESOLVED","evidence_chain":["..."],"mechanical_check_result":"PASS|FAIL|NOT_RUN","effect_on_plan":"..."}],"claims":[],"blockers":[],"next_reversible_action":"..."}.'
+typical_count: 1 per lane
+evidence_pointer: fine-tuning/program-coordination/PROMPTS.md FINAL-EVAL-CUSTODIAN mandate
+runtime:
+  model: sonnet
+  max_turns: 12
+  budget_usd: 0.75
+  allowed_tools: [Read, Grep, Glob]

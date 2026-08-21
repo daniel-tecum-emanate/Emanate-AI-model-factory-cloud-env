@@ -1,0 +1,49 @@
+slug: org-readiness-census
+role_family: forensics
+mission: Determine whether an org is trainable and which mode, from prod data floors.
+stages:
+- S1
+status: draft
+spec_version: v1
+read_first:
+- the org's live book counts (read-only prod)
+- ORG-READINESS-CENSUS methodology doc
+- the org config template
+mandate:
+- task: pull book counts (accounts, transcripts, reviews, fact-bearing share) read-only
+  stop_or_ask: never write to prod; read-only always
+- task: classify tier A/B/C and axis verdict against the documented floors
+  stop_or_ask: ask if the org sits exactly on a tier boundary
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/org-readiness-census.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- census report with tier + axis verdict + counts, no customer PII
+done_when: tier (A/B/C) + axis verdict (full/behavioral-dominant/factual-dominant) delivered with counts,
+  no PII persisted
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: '1'
+evidence_pointer: GS1 (Grand Steel), TD (trajectory-data census)
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

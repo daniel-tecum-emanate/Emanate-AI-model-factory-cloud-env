@@ -1,0 +1,53 @@
+slug: curation-consolidator
+role_family: consolidator
+mission: Merge every reader's line-verdict lists into one deterministic work queue.
+stages:
+- S4
+status: draft
+spec_version: v1
+# Budget raised 1.00 -> 2.00 (MF-FINETUNE-EXEC, 2026-07-30 grand-steel run 523ecbbf):
+# the role-family default capped the node at $1 and the 11:48 PT dispatch was
+# budget-killed at $0.92 mid-merge (ledger tier2 row) after re-reading the reader
+# reports + corpus context. Per factory_node_run's own guidance, the real number
+# belongs in the spec's runtime block where it is reviewable.
+runtime:
+  budget_usd: 2.00
+  executor: self_dispatch
+read_first:
+- every corpus-reader's output file for this run
+- the disposition-precedence rule (which verdict wins a tie)
+mandate:
+- task: merge all readers' verdicts into one queue with a deterministic tie-break rule
+  stop_or_ask: escalate systematic disagreement between readers rather than silently averaging
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/curation-consolidator.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: false
+outputs:
+- 'CURATION-MANIFEST: one verdict per line + disagreement count'
+done_when: every line has exactly one verdict; both-ways disagreement count (L52-style) is reported
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: '1'
+evidence_pointer: CURATION-MANIFEST
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

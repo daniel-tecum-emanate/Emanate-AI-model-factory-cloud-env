@@ -1,0 +1,90 @@
+# QA-ONLY SYNTHETIC ORG — NOT A REAL CUSTOMER.
+# Created for model-factory-v1's T16 end-to-end dry-run (PRContext.md: "run against a
+# small synthetic org"). Every field below is fabricated/fictional. Safe to delete after
+# the dry-run session ends; safe to re-run repeatedly (rm -rf runs/qa-dryrun-synth first).
+# All governance fields are pre-cleared (unlike grand-steel.yaml's real pending state) so
+# this org can walk the FULL pipeline including both human gates without waiting on Kiara.
+
+org:
+  slug: qa-dryrun-synth
+  id: 00000000-0000-4000-8000-000000000001   # fake UUID, never a real org_id
+  name: QA Dryrun Synth Org
+  customer_status: CONTRACTED
+
+book:
+  accounts: 100
+  fact_bearing_accounts: 40
+  zero_order_accounts: 60
+  book_revenue_usd: 50000
+  transcripts: 100
+  reviews: 500
+  runs_total: 500
+  usable_runs: 480
+  actionable_runs: 150
+  reviews_with_trajectory_id: 100
+
+census:
+  tier: A
+  axis_verdict: full
+  census_doc: company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md
+  readiness_report: company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md
+
+model_plan:
+  base_model: accounts/fireworks/models/qwen3p6-27b
+  output_model: accounts/emanate/models/qa-dryrun-synth-v1-agent
+  variant: full
+  slices:
+    replay: true
+    real_trajectories: false
+    specialist: true
+    factual_qa: full
+  qa_pairs_estimate: 4000
+  trajectory_selection_estimate: [50, 100]
+  seed: 42
+  inventory_tool: query_inventory
+  custom_watch_items: [flag-for-human-review]
+  system_prompt_source: buildSystemPrompt(allowedActions, customActions)
+
+training:
+  lora_rank: 32
+  lora_alpha: 32
+  learning_rate: 3.0e-6
+  epochs: 1
+  weight_decay: 0.0
+  target_modules: all-linear
+
+champion:
+  model_id: null
+  baseline: frontier-agent
+
+gates:
+  baselines: TBD-first-baseline-run
+  structure: lexicographic
+
+budget:
+  ptc_reference_tokens_per_epoch: 3998200
+  token_volume_fraction_of_ptc: 0.05
+  sft_rate_usd_per_m: 3.00
+  dual_bucket_multiplier: 2.0
+  projection_calibration: 1.3
+  unroll_multiplier: 1.386
+  eval_window_cap_usd: 15
+  train_all_in_cap_usd: 35
+  stop_gate_usd: 100
+
+governance:
+  data_use_clearance: CLEARED
+  dpa_signed: true
+  training_rights_clause: true
+  pii_egress_cleared: true
+  permitted_uses: [retrieval, eval, sft, preference, research]
+
+serving:
+  mode: undecided
+  activation_table: org_custom_models
+  min_accelerators: 2
+
+paths:
+  platform_repo: platform-alpha
+  dossiers_out: finetune-out/dossiers-qa-dryrun-synth
+  export_script: scripts/export-account-dossiers.ts

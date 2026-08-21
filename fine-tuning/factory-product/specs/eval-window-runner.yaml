@@ -1,0 +1,51 @@
+slug: eval-window-runner
+role_family: verifier
+mission: 'Run one dedicated eval window: FC smoke first, then the full battery, then verified teardown.'
+stages:
+- S8
+status: draft
+spec_version: v1
+read_first:
+- the eval instrument from eval-instrument-builder
+- the deployment/teardown runbook
+mandate:
+- task: run the FC smoke first; teardown immediately on smoke failure
+  stop_or_ask: n/a — smoke-fail is an automatic teardown, not a judgment call (L28)
+- task: assert dedicated routing on every live call
+  stop_or_ask: abort rather than let a call silently fall back to serverless (L34-routing)
+- task: verify teardown with a retrying GET until 0 live, never fire-and-forget
+  stop_or_ask: escalate a CRITICAL alert if teardown can't be confirmed after N retries (L46)
+laws:
+- 'single-writer discipline: own report/branch/worktree only; shared files route through the coordinator'
+- create the report file first (status header) before doing any work — crash/resume safety
+- never interrupt mid-transfer; liveness is measured by report mtime, not chat presence
+- records outrank this prompt — if a canon file and this spec disagree, the canon file wins and the disagreement
+  is flagged, not silently resolved
+- teardown must VERIFY-ZERO via retrying GET, never fire-and-forget (L46)
+single_writer:
+  owns:
+  - company-brain/3-execution/reports/eval-window-runner.md
+  do_not_touch:
+  - any file another live stream owns (check heartbeat/STATE.md File Locks first)
+workspace:
+  worktree: 'for platform-alpha code changes: own worktree named `platform-alpha-<run-slug>[-<descriptor>]`
+    (never share a checkout with another live stream); for report-only outputs in this repo, work directly
+    in the main checkout'
+  branch_pattern: feat/<run-slug>[-<descriptor>]
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields:
+  - last_completed_step
+  - partial_output_path
+  paid: true
+outputs:
+- eval battery results + verified-zero teardown confirmation
+done_when: teardown is verified GET->404 (not fire-and-forget); dedicated routing is asserted on every
+  call
+final_response_shape: headline (one line) + counts + one top finding/prediction, so the coordinator can
+  triage without opening files (AGENT-CATALOG.md §A.10 / MULTI-AGENT-REVIEW-PLAYBOOK §2.7)
+typical_count: '1'
+evidence_pointer: H, EVAL-ONE, A1 EVAL-WINDOW
+addenda_channel: mid-flight changes arrive as self-contained ADDENDUM blocks appended to this agent's
+  inbox file, applied at the next tick boundary (CONTEXT-DESIGN P7)

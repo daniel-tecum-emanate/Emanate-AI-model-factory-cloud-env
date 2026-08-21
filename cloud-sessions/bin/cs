@@ -1,0 +1,3290 @@
+#!/usr/bin/env bash
+# cs — a deliberate driver for Claude Code cloud sessions.
+#
+# Provenance note, 2026-08-18: originally written and verified against a different
+# repo (daniel0tgc/internal-company-tool), which has an atlas-os/ folder providing
+# heartbeat.py/worktree.py. atlas-os/ does not exist in this repo
+# (emanate-tecum-workflow) — `board`/`exodus`/auto-registration below therefore
+# refuse loudly here by design (see ../playbooks/09-porting-to-another-repo.md);
+# every other command is unaffected.
+#
+# Every command here is a thin, checked wrapper over the `claude` CLI. It adds
+# three things the bare CLI does not:
+#   1. Preflight gates that refuse instead of degrading silently.
+#   2. A durable local record of dispatched sessions, so `cs ls` survives reboots.
+#   3. A `last` alias, so you are not copy-pasting session IDs.
+#
+# See ../README.md for the full guide, ../AGENT.md for the operating rules.
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+# This script's own absolute path, so a command can re-invoke another cs command
+# (`cs board` runs `cs sessions --json`) without guessing at PATH.
+SELF="$HERE/$(basename -- "${BASH_SOURCE[0]}")"
+STATE_DIR="$ROOT/state"
+LEDGER="$STATE_DIR/sessions.jsonl"
+mkdir -p "$STATE_DIR"
+
+BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
+if [[ ! -t 1 ]]; then BOLD=""; RED=""; GREEN=""; YELLOW=""; DIM=""; OFF=""; fi
+
+ok()   { printf '%s  ok%s   %s\n' "$GREEN" "$OFF" "$*"; }
+warn() { printf '%s warn%s   %s\n' "$YELLOW" "$OFF" "$*"; }
+bad()  { printf '%s fail%s   %s\n' "$RED" "$OFF" "$*"; }
+die()  { printf '%serror:%s %s\n' "$RED" "$OFF" "$*" >&2; exit 1; }
+
+# ---------------------------------------------------------------- claude binary
+# The CLI is not always on PATH: on this machine it lived only inside the VS Code
+# extension bundle until 2026-08-12. Resolve it explicitly and say which one won,
+# because a version difference changes which features exist.
+resolve_claude() {
+  if [[ -n "${CS_CLAUDE_BIN:-}" && -x "${CS_CLAUDE_BIN}" ]]; then echo "$CS_CLAUDE_BIN"; return; fi
+  if command -v claude >/dev/null 2>&1; then command -v claude; return; fi
+  if [[ -x "$HOME/.local/bin/claude" ]]; then echo "$HOME/.local/bin/claude"; return; fi
+  local bundled
+  bundled="$(ls -d "$HOME"/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude 2>/dev/null | sort -V | tail -1 || true)"
+  if [[ -n "$bundled" && -x "$bundled" ]]; then echo "$bundled"; return; fi
+  return 1
+}
+
+# Resolve lazily. `cs ls`, `cs track`, `cs open` and `cs env` do not invoke the CLI at all,
+# and refusing to run them because the binary is missing conflates "cannot dispatch" with
+# "cannot read my own ledger".
+CLAUDE="$(resolve_claude || true)"
+require_claude() {
+  [[ -n "$CLAUDE" ]] || die "no \`claude\` binary found. Install it: see playbooks/01-setup.md"
+}
+
+# ------------------------------------------------------------------- the ledger
+# Dispatch records live here because there is no CLI command that lists cloud
+# sessions non-interactively. claude.ai/code stays authoritative; this is a
+# convenience index, and `cs ls` says so.
+# A cloud session's own hook telemetry is written to the VM's disk and dies with it, and
+# that is deliberate (committing it would turn an involuntary record into a cooperative
+# one - see reference/verified-facts.md). So THIS is the durable record of a cloud agent,
+# and it has to carry enough to be one: not just "a session existed" but where it came
+# from, what it was allowed to touch, and where its output will appear.
+#
+# CS_EXTRA is an optional JSON object merged into the row. Unknown keys are kept as-is so
+# the schema can grow without a migration.
+record() { # id, title, repo, branch, mode  [CS_EXTRA='{"k":"v"}']
+  CS_ID="$1" CS_TITLE="$2" CS_REPO="$3" CS_BRANCH="$4" CS_MODE="$5" python3 - "$LEDGER" <<'PY'
+import json, os, sys, datetime, tempfile
+path = sys.argv[1]
+row = {
+    "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+    "id": os.environ["CS_ID"],
+    "title": os.environ["CS_TITLE"],
+    "repo": os.environ["CS_REPO"],
+    "branch": os.environ["CS_BRANCH"],
+    "mode": os.environ["CS_MODE"],
+    "url": "https://claude.ai/code/" + os.environ["CS_ID"],
+}
+extra = os.environ.get("CS_EXTRA") or ""
+if extra.strip():
+    try:
+        d = json.loads(extra)
+        if isinstance(d, dict):
+            # Never let an extra silently overwrite an identity field.
+            for k, v in d.items():
+                if k not in ("id", "ts", "url"):
+                    row[k] = v
+    except ValueError:
+        row["extra_parse_error"] = extra[:200]
+with open(path, "a") as fh:
+    fh.write(json.dumps(row) + "\n")
+PY
+}
+
+last_id() {
+  [[ -s "$LEDGER" ]] || die "no sessions recorded yet. Run: cs handoff \"<what to continue>\""
+  # The ledger is TRACKED, so it travels with a port of this folder. In a transplant, `last`
+  # resolved to a live session of the ORIGINAL repo with rc 0 and no warning - so `cs send
+  # last` in the new repo would headlessly steer the old repo's session. Found by the
+  # 2026-08-17 porting audit. Refuse a cross-repo `last` instead of guessing.
+  CS_CUR_REPO="$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || true)" \
+  python3 - "$LEDGER" <<'PY'
+import json, os, sys
+# Tolerate damage. `record` appends non-atomically, so an interrupted dispatch leaves a
+# truncated final line - and a hard parse there breaks `last` for every command at exactly
+# the moment you most need it.
+rows = []
+for line in open(sys.argv[1]):
+    if not line.strip(): continue
+    try: rows.append(json.loads(line))
+    except ValueError: pass
+if not rows:
+    raise SystemExit("ledger has no readable records. Authoritative list: https://claude.ai/code")
+# A row can be valid JSON and still be missing fields - same class of damage as a truncated
+# line, one layer in. A KeyError here would break `last` for every command.
+last = rows[-1].get("id")
+if not last:
+    raise SystemExit("the most recent ledger row carries no id. Authoritative list: https://claude.ai/code")
+cur = os.environ.get("CS_CUR_REPO") or ""
+row_repo = rows[-1].get("repo") or ""
+# Only refuse on a POSITIVE mismatch. Outside a repo, or on an old row with no repo field,
+# there is nothing to compare - behave as before rather than inventing a refusal.
+if cur and row_repo and row_repo not in ("-", cur):
+    raise SystemExit(
+        f"the most recent ledger row belongs to repo '{row_repo}', but you are in '{cur}'.\n"
+        f"This ledger likely travelled with a port of cloud-sessions/. Pass the session id\n"
+        f"explicitly, or remove the foreign rows with: cs rm <id>")
+print(last)
+PY
+}
+
+# `last` resolves to the most recent dispatch; anything else is passed through.
+resolve_id() {
+  local raw="${1:-}"
+  [[ -n "$raw" ]] || die "missing session id (or use \`last\`)"
+  if [[ "$raw" == "last" ]]; then last_id; return; fi
+  # Accept a claude.ai/code URL (scheme optional, query/fragment/trailing slash tolerated) or
+  # a bare id - then VALIDATE. Without the check a typo is silently accepted as a session id
+  # and every later command quietly targets nothing.
+  local id
+  id="$(printf '%s' "$raw" | sed -E 's#^(https?://)?[^/]*claude\.ai/code/##; s#[?#].*$##; s#/+$##')"
+  [[ "$id" =~ ^(session|cse)_[A-Za-z0-9]+$ ]] \
+    || die "not a session id: $raw  (expected session_... or cse_..., or a claude.ai/code URL)"
+  printf '%s\n' "$id"
+}
+
+# ------------------------------------------------------------------- git gating
+# The cloud VM clones your GitHub remote, not your disk. Uncommitted or unpushed
+# work is invisible to it, and the resulting failure reads like a git error
+# rather than "you forgot to push" — so gate on it explicitly.
+git_gate() {
+  local allow_bundle="${1:-no}"
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
+
+  local remote branch dirty ahead
+  remote="$(git remote get-url origin 2>/dev/null || true)"
+  git rev-parse --verify -q HEAD >/dev/null \
+    || die "this branch has no commits yet. Commit and push before dispatching."
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  [[ "$branch" != "HEAD" ]] || die "detached HEAD. Check out a branch before dispatching."
+  dirty="$(git status --porcelain | wc -l | tr -d ' ')"
+
+  if [[ -z "$remote" ]]; then
+    if [[ "$allow_bundle" == "yes" ]]; then
+      warn "no origin remote — will bundle the local repo (tracked files only, <100MB)"
+    else
+      die "no origin remote. Re-run with --bundle to upload the local repo instead."
+    fi
+  elif [[ "$remote" != *github.com* && "$allow_bundle" != "yes" ]]; then
+    die "origin is not GitHub ($remote). Cloud sessions clone GitHub only; re-run with --bundle."
+  fi
+
+  if [[ "$allow_bundle" == "yes" ]]; then
+    [[ "$dirty" -gt 0 ]] && warn "$dirty uncommitted change(s): tracked edits are bundled, untracked files are NOT"
+    return 0
+  fi
+
+  [[ "$dirty" -eq 0 ]] || die "$dirty uncommitted change(s). The VM clones origin and cannot see them. Commit and push, or use --bundle."
+
+  if ! git rev-parse --abbrev-ref "@{upstream}" >/dev/null 2>&1; then
+    die "branch '$branch' has no upstream. Run: git push -u origin $branch"
+  fi
+  # Having *an* upstream is not enough — the VM clones origin specifically. A branch tracking
+  # a fork can be fully "pushed" and still leave origin stale, which dispatches an autonomous
+  # session against code that is not the code you are looking at.
+  local up_remote; up_remote="$(git config --get "branch.$branch.remote" || true)"
+  [[ "$up_remote" == "origin" ]] || die \
+    "branch '$branch' tracks '$up_remote', not origin. The cloud VM clones origin and will not
+       see these commits. Run: git push -u origin $branch"
+  ahead="$(git rev-list --count "@{upstream}..HEAD")"
+  [[ "$ahead" -eq 0 ]] || die "$ahead unpushed commit(s) on '$branch'. Run: git push"
+  return 0
+}
+
+strip_ansi() { LC_ALL=C tr -d '\r' | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g; s/\x1b\][^\x07]*\x07//g'; }
+
+# ------------------------------------------------------------------- portability
+# `cs` is written on macOS and also runs on Linux - inside a cloud session, on a CI box,
+# on a colleague's machine. Three constructs differ, and all three fail LOUDLY on one
+# platform and silently on the other. Measured on a real cloud VM 2026-08-14, where the
+# test harness had already been fixed for two of them and the tool itself had not.
+
+# BSD: script [-q] file command args...   GNU: script [-q] -c "command args" file
+if script -q -c true /dev/null >/dev/null 2>&1; then CS_SCRIPT=gnu; else CS_SCRIPT=bsd; fi
+
+# Run a command under a pty, teeing to $1.
+run_under_pty() {
+  local log="$1"; shift
+  if [[ "$CS_SCRIPT" == gnu ]]; then
+    local cmd; cmd="$(printf '%q ' "$@")"
+    script -q -c "$cmd" "$log"
+  else
+    script -q "$log" "$@"
+  fi
+}
+
+# BSD mktemp accepts a bare -t template; GNU requires trailing X's.
+cs_mktemp() { mktemp -t "$1.XXXXXX"; }
+
+# macOS has `open`; Linux has `xdg-open`, and headless boxes have neither.
+open_url() {
+  if command -v open >/dev/null 2>&1; then open "$1"
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1"
+  else printf 'no browser opener on this system. Open it yourself:\n  %s\n' "$1"; fi
+}
+
+# ---------------------------------------------------------------------- doctor
+cmd_doctor() {
+  # `fail` = your account/install is broken. `blocked` = the account is fine but a dispatch
+  # from HERE would be refused. Collapsing the second into a green "ready." is exactly the
+  # degraded-reads-as-meaningful failure this folder exists to avoid — and doctor is the one
+  # command whose entire job is to predict whether dispatch will work.
+  local fail=0 blocked=""
+  printf '%sclaude cloud sessions — preflight%s\n\n' "$BOLD" "$OFF"
+
+  if [[ -z "$CLAUDE" ]]; then
+    bad "binary        no \`claude\` on PATH — see playbooks/01-setup.md"; fail=1
+  else
+    ok "binary        $CLAUDE ($("$CLAUDE" --version 2>/dev/null | head -1))"
+  fi
+  case "$CLAUDE" in
+    *"/.vscode/extensions/"*)
+      warn "that is the VS Code extension's private copy. Install a real CLI: $CLAUDE install latest" ;;
+  esac
+
+  local auth=""
+  [[ -n "$CLAUDE" ]] && auth="$("$CLAUDE" auth status 2>/dev/null || true)"
+  if [[ -z "$auth" ]]; then
+    bad "auth          could not read status — run: claude auth login"; fail=1
+  else
+    local method plan
+    method="$(printf '%s' "$auth" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("authMethod","?"))' 2>/dev/null || echo '?')"
+    plan="$(printf '%s' "$auth" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("subscriptionType","?"))' 2>/dev/null || echo '?')"
+    if [[ "$method" == "claude.ai" ]]; then
+      ok "auth          claude.ai subscription ($plan) — required for --cloud and --teleport"
+    else
+      bad "auth          authMethod=$method. API-key auth cannot use --cloud or --teleport. Run: claude auth login"; fail=1
+    fi
+  fi
+
+  for v in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX; do
+    if [[ -n "${!v:-}" ]]; then bad "env           $v is set — it overrides claude.ai auth and disables cloud sessions"; fail=1; fi
+  done
+
+  # gh being authenticated locally is a DIFFERENT grant from GitHub being connected to
+  # the Claude account. Only the first is checkable from here, and mistaking one for the
+  # other cost a wrong conclusion on 2026-08-12: dispatch silently bundled instead of
+  # cloning, so nothing could be pushed and routines failed with a 403.
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    ok "github(local) gh authenticated ($(gh auth status 2>&1 | sed -n 's/.*Logged in to github.com account \([^ ]*\).*/\1/p' | head -1))"
+  else
+    bad "github(local) gh not authenticated — run: gh auth login"; fail=1
+  fi
+  warn "github(cloud) NOT CHECKABLE from here. If /web-setup has never been accepted, dispatch
+                silently bundles instead of cloning: no branch, no PR, and routines 403."
+
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local branch dirty remote
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    dirty="$(git status --porcelain | wc -l | tr -d ' ')"
+    remote="$(git remote get-url origin 2>/dev/null || echo 'none')"
+    if [[ "$branch" == "HEAD" ]]; then
+      # git_gate refuses a detached HEAD, so doctor must not report it as fine. Cloud
+      # session checkouts start detached, which is exactly where this misled.
+      warn "repo          $(basename "$(git rev-parse --show-toplevel)") on a DETACHED HEAD — dispatch will refuse"
+      blocked="detached HEAD"
+    else
+      ok "repo          $(basename "$(git rev-parse --show-toplevel)") on $branch"
+    fi
+    [[ "$remote" == *github.com* ]] && ok "remote        $remote" || warn "remote        $remote — not GitHub, dispatch needs --bundle"
+    if [[ "$dirty" -eq 0 ]]; then ok "worktree      clean"; else warn "worktree      $dirty uncommitted change(s) — invisible to the cloud VM"; blocked="uncommitted changes"; fi
+    if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+      local ahead; ahead="$(git rev-list --count '@{upstream}..HEAD')"
+      if [[ "$ahead" -eq 0 ]]; then ok "pushed        up to date with upstream"; else warn "pushed        $ahead unpushed commit(s) — invisible to the cloud VM"; blocked="unpushed commits"; fi
+    else
+      warn "pushed        no upstream for '$branch'"; blocked="no upstream"
+    fi
+  else
+    warn "repo          not in a git repository — cd to one before dispatching"; blocked="not a git repo"
+  fi
+
+  if [[ -t 1 ]]; then
+    ok "tty           interactive — \`cs start\` can dispatch"
+  else
+    warn "tty           not a TTY. \`claude --cloud\` refuses without one; run \`cs start\` from a real terminal"; blocked="no TTY"
+  fi
+
+  local n=0
+  [[ -s "$LEDGER" ]] && n="$(wc -l < "$LEDGER" | tr -d ' ')"
+  ok "ledger        $n recorded dispatch(es) — $LEDGER"
+
+  printf '\n'
+  if [[ "$fail" -ne 0 ]]; then
+    printf '%snot ready.%s  Fix the failures above, then re-run: cs doctor\n' "$RED" "$OFF"; return 1
+  elif [[ -n "$blocked" ]]; then
+    printf '%snot dispatchable from here.%s  Your account and install are fine, but `cs start`\n' "$YELLOW" "$OFF"
+    printf '  would refuse: %s\n' "$blocked"; return 1
+  else
+    printf '%sready.%s  Dispatch with: cs handoff "<what to continue>"\n' "$GREEN" "$OFF"
+  fi
+}
+
+# ----------------------------------------------------------------------- start
+cmd_start() {
+  require_claude
+  local bundle=no env_id="" task="" literal=no
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --bundle) bundle=yes; shift ;;
+      --env) [[ $# -ge 2 ]] || die "--env needs an environment id"; env_id="$2"; shift 2 ;;
+      --) shift; task="$*"; literal=yes; break ;;
+      -*) die "unknown flag: $1" ;;
+      *) task="$*"; break ;;
+    esac
+  done
+  [[ -n "$task" ]] || die "usage: cs start [--bundle] [--env <id>] \"<task>\""
+  # A flag placed AFTER the task is swallowed by "$*" and silently ignored: `cs start "..."
+  # --bundle` would CLONE instead of bundling and say nothing - you asked for one thing and
+  # got the opposite. cs handoff already refuses this for --plan. `--` is the escape hatch
+  # for a task whose text genuinely contains one of these words.
+  if [[ "$literal" != yes ]]; then
+    case " $task " in
+      *" --bundle "*|*" --env "*) die "flags must come before the task.
+       Run: cs start [--bundle] [--env <id>] \"<task>\"
+       If the task text really does contain that word, put it after --." ;;
+    esac
+  fi
+
+  # `claude --cloud` refuses without a TTY and warns that a non-interactive
+  # invocation "would silently ignore --cloud" and run locally instead. Refusing
+  # up front beats discovering that after the work has already run on your Mac.
+  [[ -t 0 && -t 1 ]] || die "cs start needs an interactive terminal (claude --cloud refuses without a TTY).
+       Run it from a real shell. To steer an existing session headlessly, use: cs send <id> \"...\""
+
+  git_gate "$bundle"
+
+  local repo branch
+  repo="$(basename "$(git rev-parse --show-toplevel)")"
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+
+  local args=(--cloud "$task")
+  if [[ -n "$env_id" ]]; then
+    # `--environment` is documented for SELF-HOSTED environments only (ccpool_...). For an
+    # Anthropic-managed environment the supported path is remote.defaultEnvironmentId, which
+    # `cs env set` writes. Passing an env_... id here is unverified, so say so rather than
+    # implying a per-dispatch override that may silently do nothing.
+    [[ "$env_id" == ccpool_* ]] || warn "--env expects a self-hosted ccpool_… id. For an
+                Anthropic-managed environment use: cs env set $env_id  (effect of passing
+                it here is UNVERIFIED)"
+    args+=(--environment "$env_id")
+  fi
+
+  local log; log="$(cs_mktemp cs-dispatch)"
+  printf '%sdispatching%s  repo=%s branch=%s%s\n' "$BOLD" "$OFF" "$repo" "$branch" "${env_id:+ env=$env_id}"
+
+  # `script` gives claude the TTY it demands while still teeing output, so the
+  # session ID can be captured and recorded. Without this the ID scrolls past
+  # and the only way back to the session is the web list.
+  if [[ "$bundle" == "yes" ]]; then
+    CCR_FORCE_BUNDLE=1 run_under_pty "$log" "$CLAUDE" "${args[@]}" || true
+  else
+    run_under_pty "$log" "$CLAUDE" "${args[@]}" || true
+  fi
+
+  local id
+  # ONLY the "View:" URL line is authoritative. The "Created cloud session:" line above it
+  # echoes the TASK TITLE back, so a whole-transcript grep lets any session id mentioned in
+  # your own task win — and `cs send last` then steers a different, running session.
+  # `cs handoff` made this near-certain: it embeds `git log -5` in the brief, and this repo's
+  # commit messages routinely name session ids.
+  id="$(strip_ansi < "$log" \
+        | sed -nE 's#^[[:space:]]*View:[[:space:]]*https?://[^/]+/code/((session|cse)_[A-Za-z0-9]+).*#\1#p' \
+        | tail -1 || true)"
+  rm -f "$log"
+
+  if [[ -z "$id" ]]; then
+    warn "dispatched, but no session ID was found in the output."
+    warn "Find it at https://claude.ai/code, then record it: cs track <id> \"$task\""
+    return 0
+  fi
+
+  record "$id" "${CS_TITLE:-$task}" "$repo" "$branch" "$([[ "$bundle" == yes ]] && echo bundle || echo clone)"
+  printf '\n%srecorded%s  %s\n' "$GREEN" "$OFF" "$id"
+  printf '  watch     https://claude.ai/code/%s\n' "$id"
+  printf '  steer     cs send last "…"        %s(works with the laptop shut)%s\n' "$DIM" "$OFF"
+  printf '  return    cs tp last\n'
+}
+
+# ------------------------------------------------------------------------ send
+cmd_send() {
+  require_claude
+  local id msg
+  id="$(resolve_id "${1:-}")"; shift || true
+  msg="$*"
+  [[ -n "$msg" ]] || die "usage: cs send <id|last> \"<message>\""
+  # No TTY needed: this is the one steering path that works from a script, a
+  # cron job, or a phone-tethered shell.
+  "$CLAUDE" -p "$msg" --cloud "$id" --output-format json
+}
+
+# -------------------------------------------------------------------------- ls
+cmd_ls() {
+  local as_json=no
+  [[ "${1:-}" == "--json" ]] && as_json=yes
+  [[ -s "$LEDGER" ]] || { echo "no dispatches recorded. Authoritative list: https://claude.ai/code"; return 0; }
+  if [[ "$as_json" == yes ]]; then
+    python3 - "$LEDGER" <<'PYJ'
+import json, sys
+rows = []
+for line in open(sys.argv[1]):
+    if not line.strip(): continue
+    try: rows.append(json.loads(line))
+    except ValueError: pass
+print(json.dumps(rows, indent=2))
+PYJ
+    return 0
+  fi
+  python3 - "$LEDGER" <<'PY'
+import json, sys
+rows, bad = [], 0
+for line in open(sys.argv[1]):
+    if not line.strip(): continue
+    try: rows.append(json.loads(line))
+    except ValueError: bad += 1
+if bad:
+    print(f'!! {bad} unreadable line(s) skipped - the ledger is damaged.')
+if not rows:
+    raise SystemExit('no readable records. Authoritative list: https://claude.ai/code')
+# A row missing a field is damage. Render it as ? rather than raising - `cs ls` failing
+# entirely is a worse answer than one incomplete row.
+def g(r, k): return str(r.get(k) or "?")
+w = max((len(g(r, "id")) for r in rows), default=10)
+for r in rows:
+    print(f'{g(r,"ts")[:16]}  {g(r,"id"):<{w}}  {g(r,"repo")}@{g(r,"branch"):<20.20}  {g(r,"title")[:52]}')
+    # The provenance line only prints when there is provenance, so rows recorded before the
+    # schema grew stay one line and nothing reads as missing when it was never collected.
+    bits = []
+    if r.get("lane"): bits.append(f'lane={r["lane"]}')
+    if r.get("source_session"): bits.append(f'from={str(r["source_session"])[:8]}')
+    if r.get("expect_branch"): bits.append(f'branch={r["expect_branch"]}')
+    if r.get("owns"): bits.append("owns=" + ",".join(r["owns"])[:44])
+    if bits:
+        print("                    " + "  ".join(bits))
+print()
+print(f'{len(rows)} recorded locally. Authoritative list (incl. sessions started elsewhere): https://claude.ai/code')
+PY
+}
+
+cmd_track() {
+  local id title="" lane="" owns="" src="" brief="" trig="" expect=""
+  id="$(resolve_id "${1:-}")"; shift || true
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --lane)    [[ $# -ge 2 ]] || die "--lane needs a value";    lane="$2"; shift 2 ;;
+      --owns)    [[ $# -ge 2 ]] || die "--owns needs a value";    owns="${owns:+$owns }$2"; shift 2 ;;
+      --from)    [[ $# -ge 2 ]] || die "--from needs a session id"; src="$2"; shift 2 ;;
+      --brief)   [[ $# -ge 2 ]] || die "--brief needs a path";    brief="$2"; shift 2 ;;
+      --trigger) [[ $# -ge 2 ]] || die "--trigger needs an id";   trig="$2"; shift 2 ;;
+      --expect-branch) [[ $# -ge 2 ]] || die "--expect-branch needs a name"; expect="$2"; shift 2 ;;
+      --) shift; title="$*"; break ;;
+      -*) die "unknown flag: $1" ;;
+      *) title="$*"; break ;;
+    esac
+  done
+  title="${title:-untitled}"
+  local repo="-" branch="-"
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    repo="$(basename "$(git rev-parse --show-toplevel)")"; branch="$(git rev-parse --abbrev-ref HEAD)"
+  fi
+  CS_EXTRA="$(CS_L="$lane" CS_O="$owns" CS_S="$src" CS_B="$brief" CS_T="$trig" CS_E="$expect" python3 - <<'PY'
+import json, os
+d = {}
+if os.environ.get("CS_L"): d["lane"] = os.environ["CS_L"]
+if os.environ.get("CS_O"): d["owns"] = os.environ["CS_O"].split()
+if os.environ.get("CS_S"): d["source_session"] = os.environ["CS_S"]
+if os.environ.get("CS_B"): d["brief"] = os.environ["CS_B"]
+if os.environ.get("CS_T"): d["trigger_id"] = os.environ["CS_T"]
+if os.environ.get("CS_E"): d["expect_branch"] = os.environ["CS_E"]
+print(json.dumps(d))
+PY
+)" record "$id" "$title" "$repo" "$branch" "tracked"
+  ok "recorded $id${lane:+  lane=$lane}${src:+  from=${src:0:8}}"
+}
+
+# ------------------------------------------------------------------------ env
+# Which cloud environment a dispatch lands in decides two things that matter and
+# are invisible at dispatch time: how much internet the session has, and whether
+# it runs on Anthropic's infrastructure at all. A `bridge` environment routes the
+# work back to this Mac, which silently removes the point of using the cloud.
+settings_env_id() {
+  python3 - <<'PY'
+import json, os
+for path, label in (
+    (os.path.join(os.getcwd(), ".claude/settings.local.json"), "project-local"),
+    (os.path.join(os.getcwd(), ".claude/settings.json"), "project"),
+    (os.path.expanduser("~/.claude/settings.json"), "user"),
+):
+    try:
+        d = json.load(open(path))
+    except Exception:
+        continue
+    v = d.get("remote", {}).get("defaultEnvironmentId") or d.get("remote.defaultEnvironmentId")
+    if v:
+        print(f"{v}\t{label}")
+        break
+PY
+}
+
+cmd_env() {
+  case "${1:-show}" in
+    set)
+      local id="${2:-}"; [[ -n "$id" ]] || die "usage: cs env set <environment-id>"
+      CS_ENV_ID="$id" python3 - <<'PY'
+import json, os, tempfile
+# Write atomically. A plain open(p,"w") truncates first, so a Ctrl-C between truncate and
+# write leaves an unparseable settings file and Claude Code can then read no settings at
+# all. Reproduced during review: SIGINT left a half-written file where a valid one had been.
+p = os.path.expanduser("~/.claude/settings.json")
+os.makedirs(os.path.dirname(p), exist_ok=True)
+try:
+    with open(p) as fh:
+        d = json.load(fh)
+except FileNotFoundError:
+    d = {}
+except (ValueError, OSError) as e:
+    raise SystemExit("cannot read %s: %s\nFix or move that file, then re-run." % (p, e))
+d.pop("remote.defaultEnvironmentId", None)   # flat form, else set and clear disagree
+d.setdefault("remote", {})["defaultEnvironmentId"] = os.environ["CS_ENV_ID"]
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p))
+with os.fdopen(fd, "w") as fh:
+    json.dump(d, fh, indent=2)
+    fh.write("\n")
+    fh.flush()
+    os.fsync(fh.fileno())
+os.replace(tmp, p)
+PY
+      ok "user settings: remote.defaultEnvironmentId = $id"
+      # The user layer is the LOWEST precedence. Writing it while a project layer pins
+      # something else is a no-op that reports success - so check what actually wins.
+      local eff; eff="$(settings_env_id)"
+      if [[ -n "$eff" && "${eff%%$'\t'*}" != "$id" ]]; then
+        warn "NOT IN EFFECT: ${eff%%$'\t'*} in ${eff##*$'\t'} settings outranks the user layer.
+                Edit that file instead - this write changes nothing for dispatch."
+      fi
+      [[ "$id" == ccpool_* ]] && warn "self-hosted environment — Team/Enterprise only"
+      return 0 ;;
+    clear)
+      python3 - <<'PY'
+import json, os, tempfile
+p = os.path.expanduser("~/.claude/settings.json")
+try:
+    with open(p) as fh:
+        d = json.load(fh)
+except FileNotFoundError:
+    raise SystemExit(0)
+except (ValueError, OSError) as e:
+    raise SystemExit("cannot read %s: %s\nFix or move that file, then re-run." % (p, e))
+d.pop("remote.defaultEnvironmentId", None)   # flat form - popping only the nested one
+d.get("remote", {}).pop("defaultEnvironmentId", None)   # left the pin silently in place
+if d.get("remote") == {}:
+    d.pop("remote")
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p))
+with os.fdopen(fd, "w") as fh:
+    json.dump(d, fh, indent=2)
+    fh.write("\n")
+    fh.flush()
+    os.fsync(fh.fileno())
+os.replace(tmp, p)
+PY
+      local eff; eff="$(settings_env_id)"
+      if [[ -n "$eff" ]]; then
+        warn "still pinned: ${eff%%$'\t'*} in ${eff##*$'\t'} settings. The user layer was
+                cleared, but that higher-precedence layer still decides. Edit it directly."
+      else
+        ok "cleared — dispatches will use your account default environment"
+      fi
+      return 0 ;;
+    show) ;;
+    *) die "usage: cs env [show|set <id>|clear]" ;;
+  esac
+
+  local cfg; cfg="$(settings_env_id)"
+  printf '%scloud environment%s\n\n' "$BOLD" "$OFF"
+  if [[ -n "$cfg" ]]; then
+    local id layer; id="${cfg%%$'\t'*}"; layer="${cfg##*$'\t'}"
+    ok "pinned        $id  (from $layer settings)"
+    case "$id" in
+      ccpool_*) warn "that is a SELF-HOSTED environment — runs on your org's infrastructure" ;;
+    esac
+    warn "if this is a 'bridge' environment it routes work back to THIS Mac — closing the
+                lid then stops it. Bridge environments are created by \`cs rc\`."
+  else
+    ok "pinned        none — dispatches use your account's default environment"
+  fi
+
+  cat <<EOF
+
+Network access decides what a session can reach. The default is Trusted, which is
+an allowlist — package registries, GitHub, cloud SDKs — NOT open internet.
+
+  None      nothing outbound (the Anthropic API is still reachable)
+  Trusted   allowlist only                                   <- the default
+  Custom    your domains, optionally plus the Trusted list    <- usually what you want
+  Full      unrestricted
+
+If a session needs a host outside the allowlist it fails with 403 and
+a plain-text 403 body naming the host. MCP connector traffic bypasses this entirely.
+
+To change it (web only — there is no CLI or API for environments):
+  1. open https://claude.ai/code
+  2. Add cloud environment, or hover an existing one and click the settings icon
+  3. set Network access to Custom (list your domains, tick "also include default
+     list of common package managers") or Full
+  4. come back and run:  cs env set <the new environment id>
+
+Per-dispatch override without changing the default:  cs start --env <id> "task"
+EOF
+}
+
+# -------------------------------------------------------------------- handoff
+# The "I am closing the laptop now" command. Composes a self-contained brief from
+# the current repo state so you do not have to write one, then dispatches it.
+cmd_handoff() {
+  local plan="" instruction=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --plan) [[ $# -ge 2 ]] || die "--plan needs a file path"; plan="$2"; shift 2 ;;
+      --) shift; instruction="$*"; break ;;
+      -*) die "unknown flag: $1" ;;
+      *) instruction="$*"; break ;;
+    esac
+  done
+  [[ -n "$instruction" ]] || die "usage: cs handoff [--plan <file>] \"<what to continue>\""
+  # A flag placed AFTER the instruction is swallowed by "$*" and would be silently ignored.
+  case " $instruction " in *" --plan "*) die "--plan must come before the instruction" ;; esac
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
+  if [[ -n "$plan" ]]; then
+    [[ -f "$plan" ]] || die "plan file not found: $plan"
+    # Rewrite to a repo-root-relative path: the cloud session starts at the repo root, so
+    # ../docs/plan.md would simply not resolve for an agent with nobody watching.
+    plan="$(git ls-files --full-name --error-unmatch "$plan" 2>/dev/null)" \
+      || die "$plan is not committed. The cloud VM clones origin and will not see it."
+  fi
+  # Gate BEFORE composing: the brief tells the session the branch is clean and pushed,
+  # and this folder's own rule is not to assert something that has not been checked.
+  git_gate no
+
+  local branch commits
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  commits="$(git log -5 --oneline)"
+
+  local task
+  task="You are continuing work that was started in a local session which has now ended.
+Nobody is watching. Work autonomously and finish.
+
+## What to do
+
+${instruction}
+"
+  [[ -n "$plan" ]] && task="${task}
+The plan is committed at \`${plan}\`. Read it first and follow it.
+"
+  task="${task}
+## Where you are starting from
+
+Branch \`${branch}\`, clean and pushed. Recent history:
+
+${commits}
+
+## How to finish
+
+- Work on a \`claude/\`-prefixed branch and **commit and push as you go, not once at the
+  end**. This VM can be reclaimed after a period of inactivity: the conversation survives,
+  but uncommitted work on this disk does not. Treat pushed commits as the only durable
+  record of your progress.
+- Open a pull request when done. Describe what you changed, what you verified, and —
+  separately and explicitly — what you could NOT verify.
+- **Do NOT promote or commit \`atlas-os/telemetry/\`.** Your hook telemetry is written to
+  this VM's disk and is discarded with it, and that is deliberate. The committed ledger is
+  read as an *involuntary* record; a session that chooses to commit its own trace produces
+  a *cooperative* one wearing the same costume, and it would be silently truncated at your
+  last commit because Stop and SessionEnd fire afterwards. Your session is recorded by the
+  branch and PR you produce, and by the dispatch record on the machine that sent you.
+- Do not force-push, and do not touch ${branch} directly.
+- If you become blocked or the task turns out to be underspecified, stop and say so
+  plainly in this session rather than guessing. A clear question is more useful than a
+  confident wrong answer.
+- If a network request fails with a 403 whose body reads \`request blocked: no rule or
+  allowlist entry allows host "..."\`, that host is outside this environment's allowlist.
+  A plain \`curl\` SWALLOWS that body on a CONNECT tunnel failure, so the block can look
+  like a hang. Do not work around it. **Collect every blocked host with the command that
+  triggered it and list them in a 'Blocked network access' section of the pull request
+  body**, so the allowlist is fixed once rather than rediscovered."
+
+  printf '%shandoff brief%s\n%s\n\n' "$DIM" "$OFF" "$task"
+  # Without a short title every handoff row in `cs ls` is the same 1.5KB brief, truncated
+  # to an identical 52 characters - which defeats the ledger for the command README leads with.
+  CS_TITLE="handoff: $instruction" cmd_start "$task"
+}
+
+# A wrong or stale ledger row used to be unfixable: state/ is "never hand-edit" and there was
+# no remove. That is precisely what you need after recording a bad id, or after a test writes
+# into the real ledger — both of which happened during review.
+cmd_rm() {
+  local id; id="$(resolve_id "${1:-}")"
+  [[ -s "$LEDGER" ]] || die "ledger is empty"
+  CS_RM_ID="$id" python3 - "$LEDGER" <<'PY'
+import json, os, sys, tempfile
+path, target = sys.argv[1], os.environ["CS_RM_ID"]
+kept, removed = [], 0
+for line in open(path):
+    if not line.strip():
+        continue
+    try:
+        row = json.loads(line)
+    except ValueError:
+        kept.append(line.rstrip("\n"))   # preserve damage rather than silently dropping it
+        continue
+    if row.get("id") == target:
+        removed += 1
+    else:
+        kept.append(json.dumps(row))
+if not removed:
+    raise SystemExit(f"no ledger entry with id {target}")
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+with os.fdopen(fd, "w") as fh:
+    fh.write("\n".join(kept) + ("\n" if kept else ""))
+    fh.flush(); os.fsync(fh.fileno())
+os.replace(tmp, path)
+print(f"removed {removed} entry/entries for {target}")
+PY
+  warn "this only forgets the session locally. It does NOT stop or delete it — see \`cs help\`."
+}
+
+# ---------------------------------------------------------------------- new
+# The front door. Everything else in this tool assumes you have already decided
+# where the work runs; this is the command you use when that IS the decision.
+#
+# Deliberately the only interactive command: `--here` and `--cloud` make it
+# scriptable, and no-argument use asks. It refuses to guess, because guessing
+# wrong in the cloud direction dispatches real work and guessing wrong in the
+# local direction quietly ties the work to a laptop that is about to close.
+cmd_new() {
+  local where="" task="" plan=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --here|--local) where=here; shift ;;
+      --cloud)        where=cloud; shift ;;
+      --plan) [[ $# -ge 2 ]] || die "--plan needs a file path"; plan="$2"; shift 2 ;;
+      --) shift; task="$*"; break ;;
+      -*) die "unknown flag: $1" ;;
+      *) task="$*"; break ;;
+    esac
+  done
+
+  # CS_DEFAULT answers the question once, in the environment, for people who have already
+  # decided. An explicit flag still wins, so the default can always be overridden per-run.
+  if [[ -z "$where" && -n "${CS_DEFAULT:-}" ]]; then
+    case "$CS_DEFAULT" in
+      here|local) where=here ;;
+      cloud)      where=cloud ;;
+      rc|phone)   where=rc ;;
+      ask)        where="" ;;
+      *) die "CS_DEFAULT is '$CS_DEFAULT' — expected here, cloud, rc, or ask" ;;
+    esac
+    [[ -n "$where" ]] && printf '%s%s%s (CS_DEFAULT)\n\n' "$DIM" "$where" "$OFF"
+  fi
+
+  if [[ -z "$where" ]]; then
+    [[ -t 0 && -t 1 ]] || die "cs new needs a terminal to ask in. Use --here or --cloud, or set CS_DEFAULT."
+    printf '%swhere should this run?%s\n\n' "$BOLD" "$OFF"
+    printf '  %s1%s  here    — this machine. Your files, your Docker, your secrets.\n' "$BOLD" "$OFF"
+    printf '           Stops when the laptop sleeps or you close the terminal.\n\n'
+    printf '  %s2%s  cloud   — an Anthropic VM. Survives a closed lid and a shutdown.\n' "$BOLD" "$OFF"
+    printf '           Steer it from your phone; no separate compute charge.\n\n'
+    printf '  %s3%s  here, but drivable from my phone  (Remote Control)\n' "$BOLD" "$OFF"
+    printf '           Runs here, so the Mac must stay awake — but you can steer\n'
+    printf '           it from the Claude app.\n\n'
+    local reply=""
+    # `read` returns non-zero on EOF, and under `set -e` that exits the script
+    # SILENTLY with status 0 — the chooser would appear to have been answered and
+    # nothing would run. Handle EOF explicitly and say so.
+    if ! read -r -p "  [1/2/3] " reply; then
+      printf '\n'
+      die "input closed before you answered — nothing dispatched"
+    fi
+    case "$reply" in
+      1|h|here|local) where=here ;;
+      2|c|cloud)      where=cloud ;;
+      3|r|rc|phone)   where=rc ;;
+      *) die "not one of 1, 2 or 3 — nothing dispatched" ;;
+    esac
+    printf '\n'
+  fi
+
+  # `--plan` only means anything to a cloud session: it names a committed file the VM will
+  # read. For `here` and `rc` it was accepted, never validated, and silently dropped — you
+  # would pass a plan and watch a session start without it. Refuse instead. Ground rule 4.
+  if [[ -n "$plan" && "$where" != "cloud" ]]; then
+    die "--plan applies only to a cloud session; '$where' would ignore it.
+       Drop --plan, or choose cloud."
+  fi
+
+  case "$where" in
+    here)
+      require_claude
+      # No git gate: local work has no remote to be invisible to, and refusing to
+      # start a local session because something is uncommitted would be absurd.
+      if [[ -n "$task" ]]; then exec "$CLAUDE" "$task"; else exec "$CLAUDE"; fi ;;
+    rc)
+      require_claude
+      cmd_rc ${task:+"$task"} ;;
+    cloud)
+      [[ -n "$task" ]] || die "a cloud session runs unattended, so it needs a task.
+       Run: cs new --cloud \"<what to do>\""
+      if [[ -n "$plan" ]]; then cmd_handoff --plan "$plan" "$task"; else cmd_handoff "$task"; fi ;;
+  esac
+}
+
+# ------------------------------------------------------------------ shell-init
+# Emits a shell function so `claude` inside this repo goes through the chooser. Printed
+# rather than written: this edits the user's shell startup, and a tool that silently
+# rewrites ~/.zshrc has earned every bit of the distrust that follows.
+cmd_shell_init() {
+  cat <<'SH'
+# --- cloud-sessions: route `claude` through the local-vs-cloud chooser ---------
+# Add to ~/.zshrc (or ~/.bashrc), then restart your shell:
+#   eval "$(cloud-sessions/bin/cs shell-init)"
+#
+# Inside the repo, a bare `claude` asks where the work should run. Everything else -
+# `claude --version`, `claude doctor`, `claude auth`, `claude -p ...`, `claude --resume`,
+# any flag at all - passes straight through untouched. Only the bare, interactive,
+# no-argument form is intercepted, because that is the only one where the question
+# makes sense.
+claude() {
+  # `command -v claude` returns the FUNCTION NAME when a function is defined - which it is,
+  # right here - so it can never find the real binary and the fallback below would be dead
+  # code. `whence -p` (zsh) and `type -P` (bash) return only a PATH executable, ignoring
+  # functions and aliases. Getting this wrong is silent until the day claude is not on PATH.
+  local real=""
+  real="$(whence -p claude 2>/dev/null)" || real="$(type -P claude 2>/dev/null)" || real=""
+  [[ -z "$real" && -x "$HOME/.local/bin/claude" ]] && real="$HOME/.local/bin/claude"
+  [[ -n "$real" ]] || { echo "no claude binary on PATH" >&2; return 127; }
+  # any argument at all, or no TTY, or already inside a session -> passthrough
+  if [[ $# -gt 0 || ! -t 0 || ! -t 1 || -n "${CLAUDE_CODE_SESSION_ID:-}" ]]; then
+    command "$real" "$@"; return
+  fi
+  local root; root="$(git rev-parse --show-toplevel 2>/dev/null)" || { command "$real"; return; }
+  [[ -x "$root/cloud-sessions/bin/cs" ]] || { command "$real"; return; }
+  "$root/cloud-sessions/bin/cs" new
+}
+SH
+}
+
+# ------------------------------------------------------------------- sessions
+# The mechanical half of "put my sessions on the cloud". It answers one question per
+# live local session: COULD this move? It deliberately does NOT answer SHOULD it move
+# — that needs reading the transcript, which is an agent's job, not a shell script's.
+#
+# The distinction matters. A session can be perfectly movable and still be pointless to
+# move (it is waiting on a human decision, not on compute), and a session can be doing
+# vital work that cannot move (its whole product is uncommitted). Both were true on
+# 2026-08-15; see reference/transferring-sessions.md.
+cmd_sessions() {
+  local json=no idle_after="${CS_IDLE_MIN:-45}"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) json=yes; shift ;;
+      --idle-after) [[ $# -ge 2 ]] || die "--idle-after needs minutes"; idle_after="$2"; shift 2 ;;
+      -*) die "unknown flag: $1" ;;
+      *) die "unexpected argument: $1" ;;
+    esac
+  done
+  require_claude
+
+  local raw
+  raw="$("$CLAUDE" agents --json 2>/dev/null || true)"
+  [[ -n "$raw" ]] || die "could not list local sessions (claude agents --json returned nothing)"
+
+  # The agent list is passed by ENV, not stdin: a `python3 - <<PY` heredoc already occupies
+  # stdin with the script itself, so a piped payload arrives empty and json.load sees "".
+  CS_AGENTS="$raw" CS_SELF="${CLAUDE_CODE_SESSION_ID:-}" CS_IDLE="$idle_after" CS_JSON="$json" \
+  python3 - <<'PY'
+import json, os, subprocess, sys, time
+
+SELF  = os.environ.get("CS_SELF", "")
+IDLE  = int(os.environ.get("CS_IDLE", "45"))
+ASJSON = os.environ.get("CS_JSON") == "yes"
+
+def git(cwd, *args):
+    try:
+        r = subprocess.run(("git",) + args, cwd=cwd, capture_output=True, text=True, timeout=15)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+def transcript_age_min(cwd, sid):
+    # Claude Code stores transcripts under ~/.claude/projects/<cwd with / and . mangled>/
+    mangled = cwd.replace("/", "-").replace(".", "-")
+    for cand in (mangled, cwd.replace("/", "-")):
+        path = os.path.expanduser(f"~/.claude/projects/{cand}/{sid}.jsonl")
+        if os.path.exists(path):
+            return (time.time() - os.path.getmtime(path)) / 60.0, path
+    return None, None
+
+def triage(cwd):
+    """Mechanical only. Returns (verdict, detail). Never guesses intent."""
+    if not cwd or not os.path.isdir(cwd):
+        return "NO-CWD", "working directory is gone"
+    if git(cwd, "rev-parse", "--is-inside-work-tree") != "true":
+        return "NO-REPO", "not a git repository — a routine has nothing to clone"
+    remote = git(cwd, "remote", "get-url", "origin")
+    if not remote:
+        return "NO-REMOTE", "no origin — routines cannot bundle, only clone"
+    if "github.com" not in remote:
+        return "NO-GITHUB", f"origin is not GitHub ({remote})"
+    porcelain = git(cwd, "status", "--porcelain") or ""
+    dirty = len([l for l in porcelain.splitlines() if l.strip()])
+    if dirty:
+        return "DIRTY", f"{dirty} uncommitted change(s) the VM would not see"
+    if git(cwd, "rev-parse", "--abbrev-ref", "@{upstream}") is None:
+        return "NO-UPSTREAM", "branch has no upstream"
+    ahead = git(cwd, "rev-list", "--count", "@{upstream}..HEAD") or "0"
+    if ahead != "0":
+        return "UNPUSHED", f"{ahead} unpushed commit(s) the VM would not see"
+    return "MOVABLE", "clean, pushed, GitHub origin"
+
+try:
+    agents = json.loads(os.environ.get("CS_AGENTS") or "[]")
+except Exception as e:
+    print(f"could not parse session list: {e}", file=sys.stderr); raise SystemExit(1)
+
+rows = []
+for a in agents if isinstance(agents, list) else []:
+    sid = a.get("sessionId") or a.get("id") or ""
+    cwd = a.get("cwd") or ""
+    age, tpath = transcript_age_min(cwd, sid)
+    if sid and SELF and sid == SELF:
+        verdict, detail = "SELF", "this session"
+    elif age is None:
+        verdict, detail = "NO-TRANSCRIPT", "no transcript found; cannot establish what it is doing"
+    elif age > IDLE:
+        verdict, detail = "IDLE", f"no activity for {int(age)} min — probably finished"
+    else:
+        verdict, detail = triage(cwd)
+    rows.append({
+        "session_id": sid, "cwd": cwd, "kind": a.get("kind", "?"),
+        "idle_min": None if age is None else round(age, 1),
+        "verdict": verdict, "detail": detail, "transcript": tpath,
+    })
+
+order = {"MOVABLE":0,"DIRTY":1,"UNPUSHED":2,"NO-UPSTREAM":3,"NO-GITHUB":4,"NO-REMOTE":5,
+         "NO-REPO":6,"NO-CWD":7,"NO-TRANSCRIPT":8,"IDLE":9,"SELF":10}
+rows.sort(key=lambda r: (order.get(r["verdict"], 99), r["idle_min"] if r["idle_min"] is not None else 1e9))
+
+if ASJSON:
+    print(json.dumps(rows, indent=2)); raise SystemExit(0)
+
+if not rows:
+    print("no local sessions found."); raise SystemExit(0)
+
+movable = [r for r in rows if r["verdict"] == "MOVABLE"]
+print(f"{len(rows)} local session(s); {len(movable)} mechanically movable\n")
+for r in rows:
+    age = "  live" if (r["idle_min"] is not None and r["idle_min"] < 5) else (
+          f"{int(r['idle_min']):4d}m" if r["idle_min"] is not None else "   ?")
+    print(f"  {r['verdict']:<14} {age}  {r['session_id'][:8]}  {os.path.basename(r['cwd']) or r['cwd']}")
+    print(f"                        {r['detail']}")
+print()
+print("MOVABLE means the VM could clone what this session is working on — NOT that moving it")
+print("is useful. A session waiting on your decision is movable and pointless to move.")
+print("Use /cloud, which reads each transcript and triages intent before dispatching.")
+PY
+}
+
+# ------------------------------------------------------------------- board
+# The master view: four sources, one screen, merged on session id where one
+# exists. Read-only by construction — every source is a file read or a
+# read-only command.
+#   (a) the heartbeat board   atlas-os/heartbeat/STATE.md — a CLAIM, parsed
+#                             tolerantly (unknown columns kept, never required)
+#   (b) cs sessions --json    mechanical triage of live LOCAL sessions
+#   (c) git worktree list     the physical lanes
+#   (d) the dispatch ledger   what this machine sent to the cloud
+# Each source degrades LOUDLY and independently: a missing board renders as
+# "board DEGRADED", never as an empty board, and when the triage source is down
+# the board rows show "?" rather than reading as dead. A skipped check is not a
+# passed check.
+cmd_board() {
+  local as_json=no
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) as_json=yes; shift ;;
+      *) die "unknown argument: $1  (usage: cs board [--json])" ;;
+    esac
+  done
+
+  # The board belongs to the repository this cs is installed in, not to the
+  # cwd, so `cs board` answers for THIS repo from anywhere.
+  local repo; repo="$(cd "$ROOT/.." && pwd)"
+
+  local sess_out sess_rc=0
+  sess_out="$("$SELF" sessions --json 2>&1)" || sess_rc=$?
+  local wt_out wt_rc=0
+  wt_out="$(git -C "$repo" worktree list --porcelain 2>&1)" || wt_rc=$?
+
+  CS_B_BOARD="$repo/atlas-os/heartbeat/STATE.md" CS_B_LEDGER="$LEDGER" \
+  CS_B_REPO="$repo" CS_B_SESS="$sess_out" CS_B_SESS_RC="$sess_rc" \
+  CS_B_WT="$wt_out" CS_B_WT_RC="$wt_rc" \
+  CS_B_SELF="${CLAUDE_CODE_SESSION_ID:-}" CS_B_JSON="$as_json" \
+  python3 - <<'PY'
+import datetime as dt, json, os, re, sys
+
+BOARD  = os.environ["CS_B_BOARD"]
+LEDGER = os.environ["CS_B_LEDGER"]
+REPO   = os.environ["CS_B_REPO"]
+SELF   = os.environ.get("CS_B_SELF", "")
+ASJSON = os.environ.get("CS_B_JSON") == "yes"
+NOW    = dt.datetime.now(dt.timezone.utc)
+LEASE_MIN = 30   # heartbeat.py's lease: an older ACTIVE self-report is a claim, not proof
+
+sources = {}
+
+def parse_ts(text):
+    if not text: return None
+    t = text.strip()
+    if t.endswith("Z"): t = t[:-1] + "+00:00"
+    try: s = dt.datetime.fromisoformat(t)
+    except ValueError: return None
+    return s if s.tzinfo else s.replace(tzinfo=dt.timezone.utc)
+
+def age_str(stamp):
+    if stamp is None: return "?"
+    m = (NOW - stamp).total_seconds() / 60.0
+    if m < 0:    return "future"
+    if m < 60:   return "%dm" % m
+    if m < 2880: return "%dh" % (m / 60)
+    return "%dd" % (m / 1440)
+
+# --- (a) the board ---------------------------------------------------------
+board_live = []
+try:
+    with open(BOARD) as fh:
+        lines = fh.read().split("\n")
+    start = None
+    for i, ln in enumerate(lines):
+        if re.match(r"^##\s+Active Sessions\s*$", ln): start = i; break
+    if start is None:
+        raise ValueError("no '## Active Sessions' section")
+    header = None
+    for i in range(start + 1, len(lines)):
+        if re.match(r"^##\s+", lines[i]): break
+        if lines[i].strip().startswith("|") and i + 1 < len(lines) \
+           and set(lines[i + 1].strip()) <= set("|-: \t") and "-" in lines[i + 1]:
+            header = i; break
+    if header is None:
+        raise ValueError("'Active Sessions' has no table")
+    cols = [c.strip() for c in lines[header].strip().strip("|").split("|")]
+    if "session" not in cols or "status" not in cols:
+        raise ValueError("Active Sessions table lacks a 'session'/'status' column")
+    rows_all = []
+    j = header + 2
+    while j < len(lines) and lines[j].strip().startswith("|"):
+        cells = [c.strip() for c in lines[j].strip().strip("|").split("|")]
+        rows_all.append(dict(zip(cols, cells + [""] * (len(cols) - len(cells)))))
+        j += 1
+    # ENDED rows released their paths; unknown statuses still HOLD (heartbeat
+    # semantics: a typo must not silently release a lock), so they stay visible.
+    board_live = [r for r in rows_all if r.get("status") != "ENDED"]
+    sources["board"] = {"status": "ok",
+                       "detail": "%d row(s), %d live" % (len(rows_all), len(board_live))}
+except (OSError, ValueError) as exc:
+    sources["board"] = {"status": "unavailable", "detail": "%s: %s" % (BOARD, exc)}
+
+# --- (b) sessions triage ---------------------------------------------------
+triage = []
+_raw = os.environ.get("CS_B_SESS") or ""
+if os.environ.get("CS_B_SESS_RC") == "0":
+    try:
+        triage = json.loads(_raw or "[]")
+        if not isinstance(triage, list): raise ValueError("not a list")
+        sources["sessions"] = {"status": "ok", "detail": "%d local session(s)" % len(triage)}
+    except ValueError as exc:
+        triage = []
+        sources["sessions"] = {"status": "unavailable",
+                               "detail": "cs sessions --json output unparseable: %s" % exc}
+else:
+    last = _raw.strip().splitlines()[-1] if _raw.strip() else "cs sessions produced no output"
+    sources["sessions"] = {"status": "unavailable", "detail": last}
+
+# --- (c) worktrees ---------------------------------------------------------
+linked = []
+if os.environ.get("CS_B_WT_RC") == "0":
+    wts, cur = [], None
+    for ln in (os.environ.get("CS_B_WT") or "").split("\n"):
+        if not ln.strip():
+            if cur: wts.append(cur); cur = None
+            continue
+        if ln.startswith("worktree "):
+            if cur: wts.append(cur)
+            cur = {"worktree": ln[9:], "branch": None, "detached": False}
+        elif cur is None:
+            continue
+        elif ln.startswith("branch "):
+            b = ln[7:].strip()
+            cur["branch"] = b[len("refs/heads/"):] if b.startswith("refs/heads/") else b
+        elif ln.strip() == "detached":
+            cur["detached"] = True
+    if cur: wts.append(cur)
+    linked = [w for w in wts if os.path.realpath(w["worktree"]) != os.path.realpath(REPO)]
+    sources["worktrees"] = {"status": "ok",
+                            "detail": "%d worktree(s), %d linked" % (len(wts), len(linked))}
+else:
+    sources["worktrees"] = {"status": "unavailable",
+                            "detail": (os.environ.get("CS_B_WT") or "git worktree list failed").strip()}
+
+# --- (d) the ledger --------------------------------------------------------
+led, led_bad = [], 0
+try:
+    with open(LEDGER) as fh:
+        for line in fh:
+            if not line.strip(): continue
+            try: led.append(json.loads(line))
+            except ValueError: led_bad += 1
+    sources["ledger"] = {"status": "ok",
+                         "detail": "%d row(s)%s" % (len(led), ", %d unreadable" % led_bad if led_bad else "")}
+except FileNotFoundError:
+    sources["ledger"] = {"status": "ok", "detail": "no ledger yet — nothing dispatched from this machine"}
+except OSError as exc:
+    sources["ledger"] = {"status": "unavailable", "detail": str(exc)}
+
+# --- merge, keyed on session id where one exists ---------------------------
+tri_by_id = {r.get("session_id"): r for r in triage if r.get("session_id")}
+def led_match(sid):
+    hits = [r for r in led if r.get("lane") == sid or r.get("id") == sid]
+    return hits[-1] if hits else None
+def wt_match(sid):
+    out = []
+    for w in linked:
+        base = os.path.basename(w["worktree"].rstrip("/"))
+        if w.get("branch") in (sid, "claude/" + sid) or base == sid:
+            out.append(w)
+    return out
+
+sessions_ok = sources["sessions"]["status"] == "ok"
+rows_out, matched_wt = [], set()
+for r in board_live:
+    sid  = r.get("session", "")
+    tri  = tri_by_id.get(sid)
+    lm   = led_match(sid)
+    wm   = wt_match(sid)
+    for w in wm: matched_wt.add(w["worktree"])
+    where = []
+    if tri: where.append("local")
+    if wm:  where.append("worktree")
+    if lm:  where.append("cloud")
+    stamp = parse_ts(r.get("last_update", ""))
+    status = r.get("status", "?")
+    stale = status == "ACTIVE" and (stamp is None or (NOW - stamp).total_seconds() > LEASE_MIN * 60)
+    verdict = (tri or {}).get("verdict") or (status if status != "ACTIVE" else ("?" if not sessions_ok else "-"))
+    rows_out.append({
+        "kind": "board", "lane": sid,
+        "session_id": (tri or {}).get("session_id") or (lm or {}).get("id") or sid,
+        "where": "+".join(where) if where else ("?" if not sessions_ok else "unseen"),
+        "status": status, "verdict": verdict,
+        "owns": r.get("owns_paths", "").replace("`", ""),
+        "age": age_str(stamp), "stale": stale,
+        "goal": r.get("goal", ""), "self": bool(SELF and sid == SELF),
+    })
+
+live_ids = set(r.get("session") for r in board_live)
+unregistered = []
+if sources["board"]["status"] == "ok" and sessions_ok:
+    for r in triage:
+        sid = r.get("session_id") or ""
+        if sid and sid not in live_ids:
+            unregistered.append(r)
+            rows_out.append({
+                "kind": "unregistered-local", "lane": "-", "session_id": sid,
+                "where": "local", "status": "-", "verdict": r.get("verdict", "?"),
+                "owns": "-", "age": ("%dm" % r["idle_min"]) if r.get("idle_min") is not None else "?",
+                "stale": False, "goal": "", "self": bool(SELF and sid == SELF),
+            })
+board_unseen = [r for r in rows_out if r["where"] == "unseen"]
+orphan_wt = [w for w in linked if w["worktree"] not in matched_wt]
+
+if ASJSON:
+    print(json.dumps({
+        "as_of": NOW.replace(microsecond=0).isoformat(),
+        "repo": REPO, "self": SELF or None, "sources": sources,
+        "rows": rows_out,
+        "board_unseen": [r["lane"] for r in board_unseen],
+        "unregistered": unregistered,
+        "worktrees_unmatched": orphan_wt,
+    }, indent=2))
+    sys.exit(0 if sources["board"]["status"] == "ok" else 1)
+
+print("cs board — %s" % os.path.basename(REPO))
+for name in ("board", "sessions", "worktrees", "ledger"):
+    s = sources[name]
+    print("  %-10s %-8s %s" % (name, "ok" if s["status"] == "ok" else "DEGRADED", s["detail"]))
+if any(sources[n]["status"] != "ok" for n in sources):
+    print("  a DEGRADED source makes this view PARTIAL, not empty — fix it before trusting absence.")
+print()
+
+if rows_out:
+    fmt = "%-26.26s %-14.14s %-15.15s %-14.14s %-32.32s %s"
+    print(fmt % ("LANE", "SID", "WHERE", "TRIAGE", "OWNS", "AGE"))
+    for r in rows_out:
+        owns = r["owns"] if len(r["owns"]) <= 32 else r["owns"][:31] + "…"
+        print(fmt % (r["lane"] + ("*" if r["self"] else ""), r["session_id"][:14],
+                     r["where"], r["verdict"], owns, r["age"] + ("!" if r["stale"] else "")))
+    print()
+    print("  * = this session    age! = ACTIVE row older than the %dm lease (a claim, not proof)" % LEASE_MIN)
+
+if sources["board"]["status"] == "ok":
+    if sessions_ok and board_unseen:
+        print()
+        print("on the board but not seen on this machine (%d) — ended, running elsewhere," % len(board_unseen))
+        print("or registered under a name its process does not carry:")
+        for r in board_unseen:
+            print("  %-26s %s, last_update %s ago" % (r["lane"], r["status"], r["age"]))
+        print("  if one is truly dead: python3 atlas-os/bin/heartbeat.py end --session <id> --evidence '…'")
+    elif not sessions_ok:
+        print()
+        print("liveness of board rows NOT determined — the sessions source is degraded;")
+        print("a skipped check is not a passed check, so nothing above is being called dead.")
+    if sessions_ok:
+        print()
+        if unregistered:
+            print("UNREGISTERED (no owns-claims — exodus cannot partition their work): %d live" % len(unregistered))
+            print("local session(s) with no live board row keyed on their session id:")
+            for r in unregistered:
+                idle = ("idle %dm" % r["idle_min"]) if r.get("idle_min") is not None else "idle ?"
+                print("  %-38s %-14s %s  %s" % (r.get("session_id", "?"), r.get("verdict", "?"),
+                                                idle, os.path.basename(r.get("cwd") or "") or r.get("cwd") or "?"))
+            print("  VISIBLE and MOVABLE are different problems, and they have different fixes:")
+            print("    visible : the auto-registration hook writes a `._presence/<id>` sentinel row.")
+            print("              It claims a path that does not exist, so exodus can partition")
+            print("              NOTHING for it — the row shows up and the work still cannot move.")
+            print("    movable : cs claim   (run inside that session, or `cs claim --session <id>`)")
+            print("              derives the session's REAL owns-claims from its own transcript,")
+            print("              checks them through heartbeat.py's overlap gate, and upgrades the")
+            print("              sentinel row in place. THIS is the command exodus needs.")
+            print("  do not hand-write a `._presence` registration to close this — it produces a")
+            print("  visible-but-unmovable row, which is the state you are already looking at.")
+        else:
+            print("every live local session is on the board.")
+if orphan_wt:
+    print()
+    print("worktree(s) matching no live lane:")
+    for w in orphan_wt:
+        print("  %s  (branch %s)" % (w["worktree"], w.get("branch") or "detached"))
+sys.exit(0 if sources["board"]["status"] == "ok" else 1)
+PY
+}
+
+# -------------------------------------------------------------------- claim
+# Turns PRESENCE into MOVABILITY.
+#
+# The auto-registration hook puts a session on the board with the sentinel claim
+# `._presence/<session-id>`: visible, and still unmovable, because `cs exodus`
+# partitions the shared dirty tree by REAL owns-claims and a sentinel covers no
+# real file. `cs board` says so and, until now, told you to hand-write another
+# sentinel registration — which closes the visibility gap and leaves the
+# movability gap exactly where it was.
+#
+# On 2026-08-17 a human closed that gap by hand: three session transcripts read,
+# 13 dirty files attributed by looking at each session's actual Edit/Write/
+# MultiEdit calls. That inference is mechanical, so it belongs here.
+#
+# It infers from WRITES, and that is the whole of its honesty problem:
+#   * a session that only READ files claims nothing (correctly — it wrote nothing);
+#   * a session whose work happened inside a SUBAGENT under-claims, because the
+#     subagent's tool calls live in ~/.claude/projects/<proj>/<sid>/subagents/*.jsonl,
+#     a different file this deliberately does not parse;
+#   * an ambiguous `Bash` redirect target (`> "$WORK/f"`, a glob, an unterminated
+#     heredoc) is NEVER claimed, only counted — over-claiming hands another lane's
+#     file to this one, which is the one failure the partition cannot survive.
+# All three are reported out loud, and `--add <path>` is the escape hatch.
+#
+# Every write goes THROUGH heartbeat.py — `overlap` first, then `register`/`update`.
+# The board file is never hand-edited here, and a refused overlap changes nothing.
+cmd_claim() {
+  local dry=no goal="" sid="" adds="" have_goal=no
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run) dry=yes; shift ;;
+      --goal)    [[ $# -ge 2 ]] || die "--goal needs text";       goal="$2"; have_goal=yes; shift 2 ;;
+      --add)     [[ $# -ge 2 ]] || die "--add needs a path";      adds="${adds}$2"$'\n'; shift 2 ;;
+      --session) [[ $# -ge 2 ]] || die "--session needs an id";   sid="$2"; shift 2 ;;
+      -*) die "unknown flag: $1
+       usage: cs claim [--dry-run] [--goal \"<text>\"] [--add <path>]... [--session <id>]" ;;
+      *)  die "unexpected argument: $1
+       usage: cs claim [--dry-run] [--goal \"<text>\"] [--add <path>]... [--session <id>]" ;;
+    esac
+  done
+
+  sid="${sid:-${CLAUDE_CODE_SESSION_ID:-}}"
+  [[ -n "$sid" ]] || die "no session id: \$CLAUDE_CODE_SESSION_ID is unset and --session was not passed.
+       A claim keyed on nothing is worse than no claim — the board's liveness oracle
+       matches session ids, so the row could never be matched to a process, and exodus
+       would partition real work onto a lane that does not exist.
+       Run this from inside the session, or pass:  cs claim --session <id>"
+
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || die "not inside a git repository — a claim names paths in a repository's working tree"
+  local repo; repo="$(git rev-parse --show-toplevel)"
+  local hb="$repo/atlas-os/bin/heartbeat.py" board="$repo/atlas-os/heartbeat/STATE.md"
+  [[ -f "$hb" ]] || die "atlas-os/bin/heartbeat.py not found — cs claim writes claims THROUGH the
+       board's own overlap gate and never around it, so without that script there is no
+       safe way to claim. It will not hand-edit atlas-os/heartbeat/STATE.md."
+  [[ -f "$board" ]] || die "heartbeat board not found at atlas-os/heartbeat/STATE.md — there is no
+       registry to claim on, and a missing board is not an empty board."
+
+  CS_CL_REPO="$repo" CS_CL_SID="$sid" CS_CL_HB="$hb" CS_CL_BOARD="$board" \
+  CS_CL_DRY="$dry" CS_CL_GOAL="$goal" CS_CL_HAVE_GOAL="$have_goal" CS_CL_ADD="$adds" \
+  CS_CL_CWD="$PWD" \
+  python3 - <<'PY'
+import json, os, re, shlex, subprocess, sys
+
+REPO      = os.environ["CS_CL_REPO"]
+SID       = os.environ["CS_CL_SID"]
+HB        = os.environ["CS_CL_HB"]
+BOARD     = os.environ["CS_CL_BOARD"]
+DRY       = os.environ.get("CS_CL_DRY") == "yes"
+HAVE_GOAL = os.environ.get("CS_CL_HAVE_GOAL") == "yes"
+GOAL      = os.environ.get("CS_CL_GOAL", "")
+ADDS      = [a.strip() for a in (os.environ.get("CS_CL_ADD") or "").split("\n") if a.strip()]
+CWD       = os.environ.get("CS_CL_CWD") or REPO
+REPO_REAL = os.path.realpath(REPO)
+
+WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+
+def refuse(headline, *lines):
+    """Ground rule 4: a degraded condition never reads as a meaningful value."""
+    print("REFUSED: %s" % headline)
+    for line in lines:
+        print("  %s" % line)
+    sys.exit(1)
+
+
+def sh(args, cwd=REPO):
+    p = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, universal_newlines=True)
+    return p.returncode, p.stdout
+
+
+def one_line(text, n=76):
+    t = " ".join(text.split())
+    return t if len(t) <= n else t[:n - 1] + "…"
+
+
+# ---- (1) the transcript ---------------------------------------------------
+# Claude Code mangles the cwd by replacing '/' and '.' with '-'. cs sessions
+# already tries both that and the '/'-only form; do the same, then widen the
+# search rather than concluding "no transcript" from one guessed filename.
+def mangle(path):
+    return path.replace("/", "-").replace(".", "-")
+
+PROJ = os.path.expanduser("~/.claude/projects")
+cands, seen = [], set()
+for base in (CWD, REPO):
+    for form in (mangle(base), base.replace("/", "-")):
+        p = os.path.join(PROJ, form, SID + ".jsonl")
+        if p not in seen:
+            seen.add(p); cands.append(p)
+
+TRANSCRIPT = next((c for c in cands if os.path.exists(c)), None)
+transcript_note = ""
+if TRANSCRIPT is None:
+    hits = []
+    try:
+        for d in sorted(os.listdir(PROJ)):
+            p = os.path.join(PROJ, d, SID + ".jsonl")
+            if os.path.exists(p):
+                hits.append(p)
+    except OSError:
+        hits = []
+    if len(hits) == 1:
+        TRANSCRIPT = hits[0]
+        transcript_note = "found under a different project directory than this cwd"
+    elif len(hits) > 1:
+        refuse("session id `%s` resolves to %d transcripts in different project "
+               "directories" % (SID, len(hits)),
+               *(["  %s" % h for h in hits] +
+                 ["ambiguous provenance is not a claim. Run cs claim from the session's own",
+                  "working directory so the cwd decides which transcript is its own."]))
+    else:
+        refuse("no transcript for session `%s`" % SID,
+               "cs claim derives a session's claims from what that session actually wrote.",
+               "With no transcript there is nothing to derive from, and an empty claim set",
+               "is not an empty write-set. Looked for:",
+               *(["  %s" % c for c in cands] +
+                 ["Pass --session with the id whose transcript exists, or claim the paths",
+                  "explicitly:  cs claim --add <path> --add <path>"]))
+
+# subagent transcripts are a DIFFERENT file, deliberately not parsed. Count them
+# so an under-claim is visible rather than silent.
+subagent_dir = os.path.join(os.path.dirname(TRANSCRIPT), SID, "subagents")
+n_subagents = 0
+try:
+    n_subagents = len([f for f in os.listdir(subagent_dir) if f.endswith(".jsonl")])
+except OSError:
+    pass
+
+
+# ---- (2) Bash redirects, conservatively -----------------------------------
+# A heredoc body is prose, not shell: a '>' inside one is not a redirect. Strip
+# bodies first, and treat an unterminated heredoc as ambiguous rather than
+# tokenising a document.
+# Anything that makes a token something other than a literal path: expansions,
+# globs, shell control, and any surviving quote or escape — a token like `\"',`
+# is shrapnel from a quoting boundary, not a filename.
+META = set("$`*?[]{}()~!<>|&;'\"\\\n\t")
+
+def strip_heredocs(cmd):
+    lines = cmd.split("\n")
+    out, i, ok = [], 0, True
+    while i < len(lines):
+        out.append(lines[i])
+        marks = re.findall(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1", lines[i])
+        i += 1
+        for _q, delim in marks:
+            j = i
+            while j < len(lines) and lines[j].strip() != delim:
+                j += 1
+            if j >= len(lines):
+                ok = False
+                i = len(lines)
+                break
+            i = j + 1
+    return "\n".join(out), ok
+
+
+def unquote(tok):
+    if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in ("'", '"'):
+        return tok[1:-1]
+    return tok
+
+
+def bash_targets(cmd):
+    """-> (targets, ambiguous). Never guesses: an unresolved target is skipped."""
+    targets, amb = [], []
+    text, ok = strip_heredocs(cmd)
+    if not ok:
+        return [], [("unterminated heredoc — the command was not tokenised at all", cmd)]
+    try:
+        lex = shlex.shlex(text, punctuation_chars=True)
+        lex.whitespace_split = True
+        toks = list(lex)
+    except ValueError as exc:
+        return [], [("could not be tokenised (%s)" % exc, cmd)]
+
+    def take(tok):
+        if tok is None:
+            amb.append(("a redirect with no target token", cmd)); return
+        v = unquote(tok)
+        if not v:
+            amb.append(("an empty redirect target", cmd)); return
+        # not files: /dev/*, and the fd forms shlex leaves as bare digits
+        if v.startswith("/dev/") or v in ("&1", "&2", "1", "2"):
+            return
+        if any(ch in META for ch in v):
+            amb.append(("target is not a literal path: %s" % one_line(tok, 44), cmd)); return
+        targets.append(v)
+
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if t in (">", ">>", "&>", "&>>", ">|"):
+            take(toks[i + 1] if i + 1 < len(toks) else None)
+            i += 2
+            continue
+        if t == "tee":
+            j = i + 1
+            while j < len(toks):
+                a = toks[j]
+                if a and all(c in "();<>|&" for c in a):
+                    break
+                if a.startswith("-") and a != "-":
+                    j += 1
+                    continue
+                take(a)
+                j += 1
+            i = j
+            continue
+        i += 1
+    return targets, amb
+
+
+# ---- (3) walk the transcript ----------------------------------------------
+def absolutize(p, base):
+    if p.startswith("~"):
+        p = os.path.expanduser(p)
+    if not os.path.isabs(p):
+        p = os.path.join(base or REPO, p)
+    return os.path.normpath(p)
+
+
+def relify(abspath):
+    r = os.path.realpath(abspath)
+    if r == REPO_REAL:
+        return None
+    if not r.startswith(REPO_REAL + os.sep):
+        return None
+    rel = os.path.relpath(r, REPO_REAL).replace(os.sep, "/")
+    return None if rel.startswith(".git/") or rel == ".git" else rel
+
+
+records = damaged = 0
+by_tool = {}
+outside = set()
+derived = {}          # rel path -> set of tool names that produced it
+ambiguous = []
+
+try:
+    fh = open(TRANSCRIPT, "r", errors="replace")
+except OSError as exc:
+    refuse("the transcript could not be read: %s" % exc, TRANSCRIPT)
+
+with fh:
+    for line in fh:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            damaged += 1
+            continue
+        records += 1
+        msg = rec.get("message")
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        rcwd = rec.get("cwd") or CWD
+        for blk in content:
+            if not isinstance(blk, dict) or blk.get("type") != "tool_use":
+                continue
+            name = blk.get("name") or ""
+            inp = blk.get("input")
+            if not isinstance(inp, dict):
+                continue
+            hits = []
+            if name in WRITE_TOOLS:
+                fp = inp.get("file_path") or inp.get("notebook_path")
+                if isinstance(fp, str) and fp.strip():
+                    hits = [fp.strip()]
+                else:
+                    ambiguous.append(("%s tool_use carried no file_path" % name, ""))
+            elif name == "Bash":
+                cmd = inp.get("command")
+                if isinstance(cmd, str) and cmd.strip():
+                    hits, amb = bash_targets(cmd)
+                    ambiguous.extend(amb)
+            for h in hits:
+                by_tool[name] = by_tool.get(name, 0) + 1
+                rel = relify(absolutize(h, rcwd))
+                if rel is None:
+                    outside.add(h)
+                else:
+                    derived.setdefault(rel, set()).add(name)
+
+if records == 0:
+    refuse("the transcript parsed to zero records (%d unreadable line(s))" % damaged,
+           TRANSCRIPT,
+           "An unparseable transcript is not a transcript of a session that wrote nothing.")
+
+
+# ---- (4) the dirty tree, and the vanished-file filter ---------------------
+rc, out = sh(["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"])
+if rc != 0:
+    refuse("git status failed, so no claim can be checked against the dirty tree",
+           *[l for l in out.strip().splitlines()[:4]])
+dirty, toks, i = set(), out.split("\0"), 0
+while i < len(toks):
+    t = toks[i]
+    if not t:
+        i += 1
+        continue
+    xy, path = t[:2], t[3:]
+    dirty.add(path.rstrip("/"))
+    if "R" in xy or "C" in xy:
+        i += 1
+        if i < len(toks) and toks[i]:
+            dirty.add(toks[i].rstrip("/"))
+    i += 1
+
+vanished = sorted(p for p in derived
+                  if not os.path.lexists(os.path.join(REPO, p)) and p not in dirty)
+for p in vanished:
+    derived.pop(p, None)
+
+added = []
+for a in ADDS:
+    rel = relify(absolutize(a, CWD))
+    if rel is None:
+        refuse("--add path is outside this repository (or is the repository root): %s" % a,
+               "A claim must name paths inside %s." % REPO)
+    added.append(rel)
+    derived.setdefault(rel, set()).add("--add")
+
+claimed = sorted(derived)
+if not claimed:
+    refuse("derived 0 claimable path(s) for session `%s`" % SID,
+           "%d record(s) read from %s" % (records, TRANSCRIPT),
+           "cs claim infers from WRITES. A session that only READ files has nothing to",
+           "claim, and neither does one whose writing happened inside a subagent (%d"
+           % n_subagents,
+           "subagent transcript(s) here, deliberately not parsed).",
+           "Claim explicitly instead:  cs claim --add <path> --add <path>")
+
+
+# ---- (5) collapse to the narrowest SAFE claim set -------------------------
+# A directory claim is only safe when EVERY dirty file under it belongs to this
+# session. Getting this wrong hands another lane's file to this one, so the test
+# is over `git status`, not over what this session happens to have touched.
+def covers(claim, path):
+    return path == claim or path.startswith(claim + "/")
+
+def mine(path):
+    return any(covers(c, path) for c in claimed)
+
+cands = set()
+for p in claimed:
+    parts = p.split("/")
+    for k in range(1, len(parts)):
+        cands.add("/".join(parts[:k]))
+
+good, blocked = [], []
+for d in sorted(cands, key=lambda x: (x.count("/"), x)):
+    under_mine = [p for p in claimed if covers(d, p)]
+    foreign = sorted(p for p in dirty if covers(d, p) and not mine(p))
+    if foreign:
+        if len(under_mine) >= 2:
+            blocked.append((d, foreign))
+        continue
+    if len(under_mine) < 2:
+        continue           # widening a directory for one file is a widening, not a collapse
+    good.append(d)
+
+# keep only the shallowest of any nested pair
+good = [d for d in good if not any(e != d and covers(e, d) for e in good)]
+# and report only the DEEPEST blocked candidate on each path, which is the tightest
+blocked = [(d, f) for d, f in blocked if not any(e != d and covers(d, e) for e, _ in blocked)]
+
+collapsed = [(d, [p for p in claimed if covers(d, p)]) for d in good]
+loose = [p for p in claimed if not any(covers(d, p) for d in good)]
+final = sorted(set(good) | set(loose))
+final = [c for c in final if not any(o != c and covers(o, c) for o in final)]
+
+
+# ---- (6) the board's current row ------------------------------------------
+def board_rows(path):
+    with open(path) as fh:
+        lines = fh.read().split("\n")
+    start = None
+    for i, ln in enumerate(lines):
+        if re.match(r"^##\s+Active Sessions\s*$", ln):
+            start = i
+            break
+    if start is None:
+        raise ValueError("no '## Active Sessions' section")
+    header = None
+    for i in range(start + 1, len(lines)):
+        if re.match(r"^##\s+", lines[i]):
+            break
+        if lines[i].strip().startswith("|") and i + 1 < len(lines) \
+           and set(lines[i + 1].strip()) <= set("|-: \t") and "-" in lines[i + 1]:
+            header = i
+            break
+    if header is None:
+        raise ValueError("'Active Sessions' has no table")
+    cols = [c.strip() for c in lines[header].strip().strip("|").split("|")]
+    for need in ("session", "owns_paths", "status"):
+        if need not in cols:
+            raise ValueError("Active Sessions table lacks a '%s' column" % need)
+    rows, j = [], header + 2
+    while j < len(lines) and lines[j].strip().startswith("|"):
+        cells = [c.strip() for c in lines[j].strip().strip("|").split("|")]
+        rows.append(dict(zip(cols, cells + [""] * (len(cols) - len(cells)))))
+        j += 1
+    return rows
+
+try:
+    rows = board_rows(BOARD)
+except (OSError, ValueError) as exc:
+    refuse("the board could not be parsed: %s" % exc, BOARD,
+           "An unreadable board is not a board with no rows on it.")
+
+row = next((r for r in rows if r.get("session") == SID), None)
+row_status = (row or {}).get("status", "")
+existing_toks = [t.strip("`") for t in re.split(r"[\s,]+", (row or {}).get("owns_paths", "").strip()) if t]
+sentinels = [t for t in existing_toks if t == "._presence" or t.startswith("._presence/")]
+existing_real = [t for t in existing_toks if t not in sentinels]
+
+def base_of(claim):
+    b = claim
+    while b.endswith("/**") or b.endswith("/*"):
+        b = b.rsplit("/", 1)[0]
+    return "**" if b in ("**", "*") else b
+
+def subsumed(c, others):
+    cb = base_of(c)
+    for o in others:
+        if o == c:
+            continue
+        ob = base_of(o)
+        if ob == "**" or cb == ob or cb.startswith(ob + "/"):
+            return True
+    return False
+
+merged = list(existing_real)
+kept, addedc = list(existing_real), []
+for c in final:
+    if not subsumed(c, merged) and c not in merged:
+        merged.append(c)
+        addedc.append(c)
+merged = [c for c in merged if not subsumed(c, merged)]
+merged = sorted(set(merged))
+already = row is not None and sorted(existing_real) == merged and not sentinels
+
+if row is None:
+    mode = "register"
+elif row_status == "ENDED":
+    refuse("`%s`'s board row is ENDED" % SID,
+           "heartbeat.py refuses to revive an ended row, and so does this: the ledger must",
+           "not carry two lives under one session id. Register a new session id instead.")
+elif sentinels and not existing_real:
+    mode = "upgrade"
+else:
+    mode = "merge"
+
+
+# ---- (7) the goal ---------------------------------------------------------
+existing_goal = (row or {}).get("goal", "").strip()
+AUTO = ("auto-registered:", "moved-to-cloud")
+def hand_written(g):
+    return bool(g) and not any(g.startswith(p) for p in AUTO)
+
+def default_goal():
+    head = ", ".join(merged[:3])
+    if len(merged) > 3:
+        head += " (+%d more)" % (len(merged) - 3)
+    return ("cs claim: writing %s" % head).replace("|", "/")
+
+if HAVE_GOAL:
+    if "|" in GOAL:
+        refuse("--goal must not contain '|' — it is the board table's column separator")
+    new_goal, goal_note = GOAL, "set from --goal"
+elif row is None:
+    new_goal, goal_note = default_goal(), "derived (no row existed)"
+elif hand_written(existing_goal):
+    new_goal, goal_note = None, "KEPT — `%s` was written deliberately, not by the hook or /cloud all" % one_line(existing_goal, 46)
+else:
+    new_goal, goal_note = default_goal(), "replaced (the existing goal is the hook's or /cloud all's, not a session's)"
+
+
+# ---- (8) report -----------------------------------------------------------
+print("cs claim%s — %s" % (" (dry run)" if DRY else "", os.path.basename(REPO_REAL)))
+print("  session   : %s" % SID)
+print("  transcript: %s" % TRANSCRIPT)
+print("              %d record(s)%s%s"
+      % (records,
+         ", %d unreadable line(s) skipped" % damaged if damaged else "",
+         " [%s]" % transcript_note if transcript_note else ""))
+print()
+
+print("derived %d path(s) from this session's own writes:" % len(claimed))
+for name in sorted(by_tool):
+    print("  %-12s %d write target(s)" % (name, by_tool[name]))
+if added:
+    print("  %-12s %d path(s) named on the command line" % ("--add", len(added)))
+if ambiguous:
+    print("  SKIPPED %d ambiguous Bash target(s) — over-claiming hands another lane's file to"
+          % len(ambiguous))
+    print("  this one, so a target that is not plainly a literal path is never claimed:")
+    shown = {}
+    for why, cmd in ambiguous:
+        if why not in shown:
+            shown[why] = cmd
+    for why in sorted(shown)[:6]:
+        print("    %s" % why)
+        if shown[why]:
+            print("      in: %s" % one_line(shown[why]))
+    if len(shown) > 6:
+        print("    ... and %d more distinct reason(s)" % (len(shown) - 6))
+if outside:
+    print("  dropped %d write(s) to paths outside this repository" % len(outside))
+if vanished:
+    print("  dropped %d path(s) that no longer exist and are not in git status" % len(vanished))
+    print("  (touched, then deleted — that is not work in flight):")
+    for p in vanished[:6]:
+        print("    %s" % p)
+clean = [p for p in claimed if p not in dirty]
+if clean:
+    # A transcript is a whole life, not a work-in-flight list. Paths this session
+    # wrote earlier and has since committed are still correctly ITS territory —
+    # the claim reserves them — but the claim is wider than what exodus will move.
+    print("  %d of these are CLEAN in git status: written earlier in this session's life"
+          % len(clean))
+    print("  and already committed. The claim reserves them; exodus moves only dirty files.")
+if n_subagents:
+    print("  NOTE: %d subagent transcript(s) exist for this session and were NOT parsed."
+          % n_subagents)
+    print("  A subagent's Write/Edit calls live in its own file, so work it did is")
+    print("  UNDER-CLAIMED here. Add it by hand:  cs claim --add <path>")
+print()
+
+print("collapse — the narrowest claim set that is still safe:")
+if collapsed:
+    for d, paths in collapsed:
+        print("  COLLAPSED  %-34s <- %d claimed path(s); every dirty file under it is this session's"
+              % (d, len(paths)))
+for d, foreign in blocked:
+    print("  KEPT SPLIT %-34s <- %d dirty file(s) under it are NOT this session's:"
+          % (d, len(foreign)))
+    for p in foreign[:4]:
+        print("             %s" % p)
+    if len(foreign) > 4:
+        print("             ... and %d more" % (len(foreign) - 4))
+if not collapsed and not blocked:
+    print("  (nothing to collapse — no directory holds two or more of this session's paths)")
+print()
+
+if sentinels:
+    print("the sentinel %s is dropped: it exists only to satisfy the board's"
+          % " ".join(sentinels))
+    print("owns-requirement, and a row that carries real claims does not need it.")
+# One claim per line, nothing else in this block: it is the machine-readable half.
+print("claims (%d):" % len(merged))
+for c in merged:
+    print("  %s%s" % (c, "   [new]" if (c in addedc and existing_real) else ""))
+print()
+
+
+# ---- (9) the overlap gate -------------------------------------------------
+ov_args = [sys.executable, HB, "overlap", "--session", SID]
+for c in merged:
+    ov_args += ["--owns", c]
+ov_rc, ov_out = sh(ov_args)
+print("overlap gate — python3 %s overlap --session %s --owns ..."
+      % (os.path.relpath(HB, REPO_REAL), SID))
+for line in ov_out.rstrip("\n").split("\n"):
+    print("  | %s" % line)
+if ov_rc != 0:
+    holders = sorted(set(re.findall(r"held by `([^`]+)`", ov_out)))
+    witness = re.findall(r"colliding path\s*:\s*(\S+)", ov_out)
+    print()
+    print("REFUSED: the overlap gate says no, so NOTHING was written.")
+    if holders:
+        print("  held by another lane: %s" % ", ".join("`%s`" % h for h in holders))
+    for w in witness[:6]:
+        print("  colliding path      : %s" % w)
+    print("  A claim is never widened into another lane's territory. Narrow this session's")
+    print("  work (or wait for that lane to end), then re-run. To see the whole board:")
+    print("    cs board")
+    sys.exit(1)
+print()
+
+print("board row : %s" % {
+    "register": "none yet -> REGISTER",
+    "upgrade":  "PRESENCE sentinel only -> REPLACED by real claims (presence -> movable)",
+    "merge":    "already carries real claims -> MERGED",
+}[mode])
+if mode == "merge":
+    if addedc:
+        print("            added: %s" % " ".join(addedc))
+    if already:
+        print("            no change: the row already carries exactly these claims")
+    kept_only = [c for c in existing_real if c in merged]
+    if kept_only:
+        print("            kept : %s" % " ".join(kept_only))
+print("goal      : %s" % goal_note)
+print()
+
+if DRY:
+    print("plan only — the board was NOT written to, and no claim was registered.")
+    print("next: cs claim   (the same command without --dry-run), then: cs exodus --dry-run")
+    sys.exit(0)
+
+
+# ---- (10) write, through heartbeat.py, never around it --------------------
+if mode == "register":
+    args = [sys.executable, HB, "register", "--session", SID,
+            "--goal", new_goal, "--risk", "low"]
+else:
+    args = [sys.executable, HB, "update", "--session", SID]
+    if new_goal is not None:
+        args += ["--goal", new_goal]
+for c in merged:
+    args += ["--owns", c]
+
+wr_rc, wr_out = sh(args)
+for line in wr_out.rstrip("\n").split("\n"):
+    if line:
+        print("  | %s" % line)
+if wr_rc != 0:
+    print()
+    print("REFUSED by heartbeat.py (%s, exit %d) — the board decides, not this command."
+          % (mode, wr_rc))
+    sys.exit(1)
+
+print()
+print("claimed. `%s` now owns %d path(s) on the board — it is MOVABLE:" % (SID, len(merged)))
+print("  cs board            confirm the row and its owns-claims")
+print("  cs exodus --dry-run preview the partition this claim makes possible")
+sys.exit(0)
+PY
+}
+
+# ------------------------------------------------------------------- exodus
+# Prepares the aggregate move to the cloud; dispatches NOTHING. The routines
+# API is reachable only from inside a session, so /cloud all consumes the
+# manifest this writes.
+#
+# The partition IS the board: `git status` is split by each ACTIVE lane's
+# owns-claims — the claims are exactly the partition that makes splitting a
+# shared dirty tree safe. A file claimed by two live sessions is a CONFLICT the
+# overlap gate should have prevented, and a hard refusal here; a file claimed
+# by nobody is listed and stays behind until a human explicitly assigns it (by
+# widening a claim on the board, never by editing the manifest).
+#
+# Per unit it builds branch claude/<lane> holding ONLY that lane's dirty files:
+# worktree.py creates the worktree (it checks the lane's live board claim), the
+# claimed files are copied in and committed, the branch is pushed, the scratch
+# worktree is removed. Never `git add -A`; the shared tree is never modified —
+# other lanes are live in it, and their files' future is decided by their PRs,
+# not by exodus.
+cmd_exodus() {
+  local manifest="" dry=no
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --manifest) [[ $# -ge 2 ]] || die "--manifest needs a path"; manifest="$2"; shift 2 ;;
+      --dry-run)  dry=yes; shift ;;
+      *) die "unknown argument: $1  (usage: cs exodus [--manifest <path>] [--dry-run])" ;;
+    esac
+  done
+
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || die "not inside a git repository — exodus partitions the current repo's dirty tree"
+  local repo; repo="$(git rev-parse --show-toplevel)"
+  git rev-parse --verify -q HEAD >/dev/null \
+    || die "this repository has no commits yet — there is no base for per-lane branches"
+  local hb="$repo/atlas-os/bin/heartbeat.py" board="$repo/atlas-os/heartbeat/STATE.md"
+  local wtpy="$repo/atlas-os/bin/worktree.py"
+  [[ -f "$hb" ]] || die "atlas-os/bin/heartbeat.py not found — exodus partitions by the board's
+       claims and refuses to run without the machinery that maintains them"
+  [[ -f "$board" ]] || die "heartbeat board not found at atlas-os/heartbeat/STATE.md — without the
+       board there is no safe partition of a shared dirty tree"
+  if [[ "$dry" != yes ]]; then
+    [[ -f "$wtpy" ]] || die "atlas-os/bin/worktree.py not found — exodus creates per-lane worktrees
+       through it (it checks the lane's live board claim)"
+    git -C "$repo" remote get-url origin >/dev/null 2>&1 \
+      || die "no origin remote — exodus builds branches for the cloud VM to clone; nothing to push to"
+  fi
+  manifest="${manifest:-$STATE_DIR/exodus-manifest.json}"
+
+  CS_EX_REPO="$repo" CS_EX_BOARD="$board" CS_EX_WTPY="$wtpy" \
+  CS_EX_ENV_ID="$( { _c="$(settings_env_id 2>/dev/null || true)"; printf '%s' "${_c%%$'\t'*}"; } )" \
+  CS_EX_SELF="${CLAUDE_CODE_SESSION_ID:-}" CS_EX_DRY="$dry" CS_EX_MANIFEST="$manifest" \
+  python3 - <<'PY'
+import datetime as dt, fnmatch, json, os, re, shutil, subprocess, sys, tempfile
+
+REPO     = os.environ["CS_EX_REPO"]
+BOARD    = os.environ["CS_EX_BOARD"]
+WTPY     = os.environ.get("CS_EX_WTPY", "")
+SELF     = os.environ.get("CS_EX_SELF", "")
+DRY      = os.environ.get("CS_EX_DRY") == "yes"
+MANIFEST = os.environ["CS_EX_MANIFEST"]
+
+# The Default anthropic_cloud environment, per .claude/commands/cloud.md.
+# /cloud all verifies it against a live routine before use; never a bridge env.
+# No baked-in account literal: an environment id belongs to ONE claude.ai account, and a
+# port of this folder to another person's repo would silently dispatch into the wrong
+# account's environment. Resolve from settings (cs env set writes it); empty means "let the
+# account default decide", which is correct everywhere. Porting audit, 2026-08-17.
+DEFAULT_ENV_ID = os.environ.get("CS_EX_ENV_ID", "")  # empty = let the account default decide
+
+def sh(args, cwd=REPO, check=True):
+    p = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, universal_newlines=True)
+    if check and p.returncode != 0:
+        raise RuntimeError("`%s` failed (%d):\n%s"
+                           % (" ".join(args), p.returncode, p.stdout.strip()))
+    return p.returncode, p.stdout
+
+# ---- the board: tolerant parse of Active Sessions -------------------------
+def board_rows(path):
+    with open(path) as fh:
+        lines = fh.read().split("\n")
+    start = None
+    for i, ln in enumerate(lines):
+        if re.match(r"^##\s+Active Sessions\s*$", ln):
+            start = i; break
+    if start is None:
+        raise ValueError("no '## Active Sessions' section")
+    header = None
+    for i in range(start + 1, len(lines)):
+        if re.match(r"^##\s+", lines[i]): break
+        if lines[i].strip().startswith("|") and i + 1 < len(lines) \
+           and set(lines[i + 1].strip()) <= set("|-: \t") and "-" in lines[i + 1]:
+            header = i; break
+    if header is None:
+        raise ValueError("'Active Sessions' has no table")
+    cols = [c.strip() for c in lines[header].strip().strip("|").split("|")]
+    for need in ("session", "owns_paths", "status"):
+        if need not in cols:
+            raise ValueError("Active Sessions table lacks a '%s' column" % need)
+    rows = []
+    j = header + 2
+    while j < len(lines) and lines[j].strip().startswith("|"):
+        cells = [c.strip() for c in lines[j].strip().strip("|").split("|")]
+        rows.append(dict(zip(cols, cells + [""] * (len(cols) - len(cells)))))
+        j += 1
+    return rows
+
+# ---- claim semantics: heartbeat's subtree globs ---------------------------
+# `**` = whole segment, zero or more segments; `*`/`?` within one segment,
+# never '/'. Every claim is a SUBTREE claim (`a/b` covers a/b and everything
+# under it), compiled here exactly as heartbeat.py does: a trailing `**` that
+# matches zero segments. A claim with no literal prefix claims the whole repo.
+def norm_claim(raw):
+    text = raw.strip().strip("`")
+    if not text: return None
+    segs = [s for s in text.split("/") if s not in ("", ".")]
+    if not segs: return None
+    first = segs[0]
+    if first == "**" or first.startswith("*") or first.startswith("?"):
+        return ["**"]
+    return segs
+
+def row_claims(row):
+    claims = []
+    for tok in re.split(r"[\s,]+", row.get("owns_paths", "").strip()):
+        segs = norm_claim(tok) if tok else None
+        if segs: claims.append(segs)
+    return claims
+
+def covers(segs, path):
+    pat = list(segs) + ["**"]
+    parts = [p for p in path.split("/") if p]
+    memo = {}
+    def walk(i, j):
+        key = (i, j)
+        if key in memo: return memo[key]
+        if i == len(pat):
+            r = j == len(parts)
+        elif pat[i] == "**":
+            r = walk(i + 1, j) or (j < len(parts) and walk(i, j + 1))
+        elif j < len(parts) and fnmatch.fnmatchcase(parts[j], pat[i]):
+            r = walk(i + 1, j + 1)
+        else:
+            r = False
+        memo[key] = r
+        return r
+    return walk(0, 0)
+
+def presence_only(owns_raw):
+    toks = [t.strip("`") for t in re.split(r"[\s,]+", owns_raw.strip()) if t]
+    return bool(toks) and all(t.startswith("._presence/") or t == "._presence" for t in toks)
+
+try:
+    rows = board_rows(BOARD)
+except (OSError, ValueError) as exc:
+    print("REFUSED: the board could not be parsed: %s" % exc)
+    print("  exodus partitions the tree BY THE BOARD'S CLAIMS; an unreadable board is not an empty board.")
+    sys.exit(2)
+
+STATUSES = ("ACTIVE", "BLOCKED", "ENDED")
+# ENDED released its paths; unknown statuses still hold (a typo must never
+# silently release a lock) — same semantics as heartbeat.holds_paths.
+live = [r for r in rows if r.get("status") in ("ACTIVE", "BLOCKED") or r.get("status") not in STATUSES]
+for r in live:
+    r["_claims"] = row_claims(r)
+
+movers = []
+for r in live:
+    if r.get("status") != "ACTIVE": continue
+    if SELF and r.get("session") == SELF: continue
+    if presence_only(r.get("owns_paths", "")): continue   # registration, not work
+    if r["_claims"]: movers.append(r)
+mover_ids = set(r["session"] for r in movers)
+
+# ---- the dirty tree -------------------------------------------------------
+# -z: no path quoting to mis-parse; -uall: an untracked DIRECTORY becomes its
+# individual files, which is the granularity claims are matched at.
+rc, out = sh(["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"])
+entries, toks, i = [], out.split("\0"), 0
+while i < len(toks):
+    t = toks[i]
+    if not t:
+        i += 1; continue
+    xy, path = t[:2], t[3:]
+    entries.append((xy, path.rstrip("/")))
+    if "R" in xy or "C" in xy:
+        i += 1                          # -z: the rename/copy origin is the next record
+        if i < len(toks) and toks[i]:
+            entries.append(("R-", toks[i].rstrip("/")))
+    i += 1
+
+unmerged = [(xy, p) for xy, p in entries if "U" in xy or xy in ("AA", "DD")]
+if unmerged:
+    print("REFUSED: the tree has %d unmerged path(s) — a merge or rebase is in progress." % len(unmerged))
+    for xy, p in unmerged: print("  %s %s" % (xy, p))
+    print("  Resolve it first; partitioning a half-merged tree would move conflict markers.")
+    sys.exit(2)
+
+seen, dirty = set(), []
+for xy, p in entries:
+    if p and p not in seen:
+        seen.add(p); dirty.append((xy, p))
+
+if not dirty:
+    print("nothing to move: the working tree is clean.")
+    sys.exit(0)
+
+# ---- partition by claims --------------------------------------------------
+unit_files, conflicts, unclaimed, self_held, inactive_held = {}, [], [], [], []
+for xy, p in dirty:
+    holders = [r for r in live if any(covers(c, p) for c in r["_claims"])]
+    if len(holders) > 1:
+        conflicts.append((p, [(h["session"], h.get("status", "?")) for h in holders]))
+    elif not holders:
+        unclaimed.append((xy, p))
+    else:
+        h = holders[0]
+        if SELF and h["session"] == SELF:
+            self_held.append((xy, p))
+        elif h["session"] in mover_ids:
+            unit_files.setdefault(h["session"], []).append((xy, p))
+        else:
+            inactive_held.append((xy, p, h["session"], h.get("status", "?")))
+units = [r for r in movers if r["session"] in unit_files]
+
+_, head = sh(["git", "rev-parse", "HEAD"]); head = head.strip()
+rc, origin = sh(["git", "remote", "get-url", "origin"], check=False)
+origin = origin.strip() if rc == 0 else ""
+
+def to_https(url):
+    m = re.match(r"^(?:ssh://)?git@([^:/]+)[:/](.+?)(?:\.git)?/?$", url)
+    if m: return "https://%s/%s" % (m.group(1), m.group(2))
+    return re.sub(r"\.git$", "", url)
+
+print("exodus%s — %s" % (" (dry run)" if DRY else "", os.path.basename(REPO)))
+print("  board  : %s — %d live row(s), %d ACTIVE lane(s) considered"
+      % (os.path.relpath(BOARD, REPO), len(live), len(movers)))
+if SELF:
+    print("  self   : %s (excluded)" % SELF)
+else:
+    print("  self   : CLAUDE_CODE_SESSION_ID is not set — NO lane was excluded as this session's own")
+print("  dirty  : %d path(s)" % len(dirty))
+print()
+
+for r in units:
+    lane = r["session"]
+    files = sorted(unit_files[lane], key=lambda e: e[1])
+    print("unit %-24s -> branch claude/%s  (%d file(s))" % (lane, lane, len(files)))
+    goal = (r.get("goal") or "").strip()
+    if goal: print("     goal: %s" % goal)
+    for xy, p in files:
+        print("     %2s %s" % (xy, p))
+if not units:
+    print("0 units: no ACTIVE lane's claims cover any dirty path.")
+print()
+
+if conflicts:
+    print("CONFLICT — claimed by more than one live session (%d path(s)):" % len(conflicts))
+    for p, hs in conflicts:
+        print("  %s" % p)
+        for s, st in hs:
+            print("      held by %s (%s)" % (s, st))
+    print()
+    print("REFUSED: the partition is not a partition while any file has two owners.")
+    print("  The board's overlap gate should have prevented this — run:")
+    print("    python3 atlas-os/bin/heartbeat.py validate")
+    print("  narrow one claim (heartbeat.py update --owns …), then re-run cs exodus.")
+    sys.exit(2)
+
+if self_held:
+    print("held by THIS session — not moving (you are running exodus; %d file(s)):" % len(self_held))
+    for xy, p in sorted(self_held, key=lambda e: e[1]):
+        print("  %2s %s" % (xy, p))
+    print()
+if inactive_held:
+    print("held by non-ACTIVE lanes — not moved (a BLOCKED/unknown-status row still holds its claim):")
+    for xy, p, s, st in sorted(inactive_held, key=lambda e: e[1]):
+        print("  %2s %-44s held by %s (%s)" % (xy, p, s, st))
+    print()
+print("UNCLAIMED — no live claim covers these (%d file(s)); they stay behind until a human" % len(unclaimed))
+print("explicitly assigns them (widen a claim on the board, then re-run — never edit the manifest):")
+for xy, p in sorted(unclaimed, key=lambda e: e[1]):
+    print("  %2s %s" % (xy, p))
+if not unclaimed:
+    print("  (none)")
+print()
+
+if DRY:
+    if not origin:
+        print("WARN: no origin remote — the execute run would refuse (nothing to push to).")
+    print("plan only — nothing was created, committed, or pushed; the shared tree was not touched.")
+    print("manifest would be written to: %s" % MANIFEST)
+    print()
+    print("next: /cloud all   (in a session) — it confirms this plan once, runs the")
+    print("      execute itself (branches + manifest), writes each unit's brief, and")
+    print("      dispatches create->run->disable. Do not run the execute by hand first:")
+    print("      /cloud all re-runs it, and a pre-existing claude/<lane> branch fails that unit.")
+    sys.exit(0)
+
+# ---- execute --------------------------------------------------------------
+def wt_root():
+    o = os.environ.get("ATLAS_WORKTREE_ROOT")
+    if o: return os.path.realpath(os.path.expanduser(o))
+    return os.path.join(os.path.dirname(REPO), ".atlas-worktrees", os.path.basename(REPO))
+
+def branch_exists(name):
+    rc, _ = sh(["git", "show-ref", "--verify", "--quiet", "refs/heads/%s" % name], check=False)
+    return rc == 0
+
+results, manifest_units = [], []
+for r in units:
+    lane = r["session"]
+    files = sorted(unit_files[lane], key=lambda e: e[1])
+    paths = [p for _, p in files]
+    branch = "claude/%s" % lane
+    owns_list = ["/".join(c) for c in r["_claims"]]
+    print("== unit %s -> %s ==" % (lane, branch))
+    created = {"wt": False, "lane_branch": False, "branch": False, "pushed": False}
+    wt_path = os.path.join(wt_root(), lane)
+
+    def fail(reason):
+        # Roll this unit back; the rest of the batch continues.
+        notes = []
+        if created["wt"]:
+            rc2, o2 = sh(["git", "worktree", "remove", "--force", "--force", wt_path], check=False)
+            notes.append("worktree removed" if rc2 == 0 else "worktree NOT removed: %s" % o2.strip())
+        if created["branch"] and not created["pushed"] and branch_exists(branch):
+            rc2, _o = sh(["git", "branch", "-D", branch], check=False)
+            notes.append(("branch %s deleted" if rc2 == 0 else "branch %s NOT deleted") % branch)
+        if created["lane_branch"] and branch_exists(lane):
+            rc2, _o = sh(["git", "branch", "-D", lane], check=False)
+            notes.append(("scaffold branch %s deleted" if rc2 == 0 else "scaffold branch %s NOT deleted") % lane)
+        print("  FAILED: %s" % reason)
+        for n in notes: print("    rollback: %s" % n)
+        results.append({"lane": lane, "ok": False, "reason": reason.splitlines()[0]})
+
+    try:
+        if branch_exists(branch):
+            fail("branch %s already exists — a previous exodus? Merge or delete it deliberately, then re-run." % branch)
+            continue
+        # worktree.py checks the lane's live claim on the board before creating.
+        rc, o = sh([sys.executable, WTPY, "--repo", REPO, "create", "--lane", lane], check=False)
+        if rc != 0:
+            fail("worktree.py create refused:\n" + "\n".join("      " + l for l in o.strip().splitlines()))
+            continue
+        created["wt"] = created["lane_branch"] = True
+        m = re.search(r"path\s*:\s*(.+)$", o, re.MULTILINE)
+        if m and os.path.isdir(m.group(1).strip()):
+            wt_path = m.group(1).strip()
+        if not os.path.isdir(wt_path):
+            fail("worktree.py reported success but no worktree directory at %s" % wt_path)
+            continue
+        # The exodus branch is claude/<lane>; worktree.py's lane-named branch is
+        # scaffolding (its LANE_RE cannot carry a slash) and is deleted once the
+        # worktree has moved onto the real branch.
+        sh(["git", "checkout", "-q", "-b", branch], cwd=wt_path)
+        created["branch"] = True
+        sh(["git", "branch", "-d", lane], cwd=wt_path, check=False)
+        created["lane_branch"] = branch_exists(lane)
+        copied = deleted = 0
+        for p in paths:
+            src, dst = os.path.join(REPO, p), os.path.join(wt_path, p)
+            if os.path.lexists(src):
+                pdir = os.path.dirname(dst)
+                if pdir: os.makedirs(pdir, exist_ok=True)
+                if os.path.islink(src):
+                    if os.path.lexists(dst): os.remove(dst)
+                    os.symlink(os.readlink(src), dst)
+                else:
+                    shutil.copy2(src, dst)
+                copied += 1
+            else:
+                if os.path.lexists(dst): os.remove(dst)
+                deleted += 1
+        sh(["git", "add", "--"] + paths, cwd=wt_path)   # exactly the claimed paths; never -A
+        msg = ("exodus(%s): move in-flight work from session %s\n\n"
+               "Copied from the shared working tree by `cs exodus`; the shared tree was\n"
+               "left untouched. Lane claim: %s"
+               % (lane, SELF or "unknown-local-session", " ".join(owns_list)))
+        sh(["git", "commit", "-q", "-m", msg], cwd=wt_path)
+        sh(["git", "push", "-q", "-u", "origin", branch], cwd=wt_path)
+        created["pushed"] = True
+        rc, o = sh([sys.executable, WTPY, "--repo", REPO, "remove", "--lane", lane], check=False)
+        if rc != 0:
+            print("  WARN: pushed, but the scratch worktree was not removed (%s)." % wt_path)
+            print("        It holds %s checked out, which blocks /cloud all's brief commit." % branch)
+            print("        fix: python3 atlas-os/bin/worktree.py remove --lane %s" % lane)
+        print("  ok: %d copied, %d deleted -> committed and pushed %s" % (copied, deleted, branch))
+        results.append({"lane": lane, "ok": True})
+        https = to_https(origin) if origin else ""
+        brief = "docs/handoff-%s.md" % lane
+        manifest_units.append({
+            "lane": lane,
+            "source_session": SELF or None,
+            "goal": (r.get("goal") or "").strip(),
+            "branch": branch,
+            "base_commit": head,
+            "brief": brief,          # placeholder: /cloud all writes it and commits it to the branch
+            "brief_exists": False,
+            "owns": owns_list,
+            "files": [{"porcelain": xy, "path": p} for xy, p in files],
+            "pushed": True,
+            "routine": {
+                "name": "handoff: %s (one-off, disable after firing)" % lane,
+                "enabled": True,
+                "mcp_connections": [],
+                "environment_id": DEFAULT_ENV_ID,
+                "environment_note": "Default anthropic_cloud environment per .claude/commands/cloud.md; verify against a live routine, never a bridge env",
+                "model": "claude-sonnet-5",
+                "git_repository": https or origin,
+                "allowed_tools": ["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+                "message": ("Run `git fetch origin %s && git checkout %s`. Then read %s on that "
+                            "branch and execute it end to end - it is the complete brief. The branch "
+                            "already carries the in-flight work this session inherits; continue on it, "
+                            "commit, push, and open a PR. If you hit something the brief does not "
+                            "cover, stop and write what you found into the PR description rather than "
+                            "guessing.") % (branch, branch, brief),
+                "fresh_at_dispatch": ["run_once_at", "events[0].data.uuid"],
+            },
+            "track": {"lane": lane, "owns": owns_list, "from": SELF or None,
+                      "brief": brief, "expect_branch": branch},
+        })
+    except (RuntimeError, OSError) as exc:
+        fail(str(exc))
+        continue
+
+manifest = {
+    "exodus_version": 1,
+    "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    "repo_root": REPO,
+    "origin": origin,
+    "base_commit": head,
+    "source_session": SELF or None,
+    "units": manifest_units,
+    "failed_units": [x for x in results if not x["ok"]],
+    "conflicts": [],
+    "unclaimed": [{"porcelain": xy, "path": p} for xy, p in sorted(unclaimed, key=lambda e: e[1])],
+    "held_by_self": [{"porcelain": xy, "path": p} for xy, p in sorted(self_held, key=lambda e: e[1])],
+    "held_by_inactive": [{"porcelain": xy, "path": p, "held_by": s, "status": st}
+                         for xy, p, s, st in sorted(inactive_held, key=lambda e: e[1])],
+    "note": ("/cloud all consumes this manifest: per unit it writes the brief on the unit's branch, "
+             "dispatches create->run->disable with explicit mcp_connections, records provenance via "
+             "cs track, and updates the board row to moved-to-cloud. An unclaimed file moves only "
+             "after an explicit human yes, expressed as a widened claim on the board and a re-run."),
+}
+d = os.path.dirname(os.path.abspath(MANIFEST))
+os.makedirs(d, exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=d, prefix=".exodus.", suffix=".tmp")
+try:
+    with os.fdopen(fd, "w") as fh:
+        json.dump(manifest, fh, indent=2)
+        fh.write("\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, MANIFEST)
+except BaseException:
+    if os.path.exists(tmp): os.unlink(tmp)
+    raise
+
+ok_n = sum(1 for x in results if x["ok"])
+bad_n = len(results) - ok_n
+print()
+print("%d unit(s) ready (branch pushed), %d failed, %d unclaimed file(s) needing a decision"
+      % (ok_n, bad_n, len(unclaimed)))
+print("manifest: %s" % MANIFEST)
+print("the shared tree was NOT modified; source lanes keep running until /cloud all retires them.")
+print()
+print("next: /cloud all   (reads the manifest and dispatches each unit, create->run->disable)")
+sys.exit(0 if bad_n == 0 else 1)
+PY
+}
+
+# -------------------------------------------------------------------- fleet
+# The cloud counterpart of `cs board`: every agent running on a cloud VM, and
+# whether any of them is stuck. Three sources, merged on session id, each one
+# tagged in the output so no fact is ever presented without its provenance:
+#
+#   (1) the ledger      state/sessions.jsonl — every dispatch we recorded. The
+#                       ONLY record that survives a dead VM. Read-only here.
+#   (2) the heartbeats  state/fleet/<id>.json — written by the cloud agents
+#                       themselves and pushed to git. Read from this checkout
+#                       AND, when the ref is present, from each lane's
+#                       remote-tracking branch, because that is where an agent's
+#                       heartbeat actually lands until someone merges it.
+#   (3) the branches    `git ls-remote` — does the expected branch exist on
+#                       origin, and how old is its tip. Network; degrades, never
+#                       fails the command.
+#
+# The rules that make it worth trusting:
+#   * BLOCKED is impossible to miss: those rows sort first, are marked, are
+#     printed in full with kind/detail/needs, and set exit code 3 so a watch
+#     loop or a wrapper can act on it.
+#   * STALE is not BLOCKED. A heartbeat older than --stale-after is a CLAIM, not
+#     proof — the same language cs board uses for the lease. It never overwrites
+#     the reported status and never changes the exit code.
+#   * A ledger row with no heartbeat is RENDERED, never omitted.
+#   * A heartbeat whose declared session_id disagrees with its filename is
+#     UNTRUSTED and is not attributed to anybody. Unknown provenance refuses.
+#   * exit 0 means "nothing reported blocked". It does NOT mean every agent is
+#     fine: an agent that never reports cannot be seen here at all, and the
+#     no-heartbeat section says so by name.
+cmd_fleet() {
+  local as_json=no stale="${CS_STALE_MIN:-15}" watch="" prune=no dry=no remote=yes
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)        as_json=yes; shift ;;
+      --stale-after) [[ $# -ge 2 ]] || die "--stale-after needs whole minutes"; stale="$2"; shift 2 ;;
+      --watch)       [[ $# -ge 2 ]] || die "--watch needs whole seconds"; watch="$2"; shift 2 ;;
+      --no-remote)   remote=no; shift ;;
+      --prune)       prune=yes; shift ;;
+      --dry-run)     dry=yes; shift ;;
+      *) die "unknown argument: $1  (usage: cs fleet [--json] [--stale-after N] [--watch N]
+       [--no-remote] [--prune [--dry-run]])" ;;
+    esac
+  done
+  [[ "$stale" =~ ^[0-9]+$ ]] || die "--stale-after takes whole minutes, got: $stale"
+  [[ "$stale" -ge 1 ]] || die "--stale-after must be at least 1 minute"
+  if [[ "$dry" == yes && "$prune" == no ]]; then
+    die "--dry-run only means something with --prune (cs fleet writes nothing otherwise)"
+  fi
+  if [[ -n "$watch" ]]; then
+    [[ "$watch" =~ ^[0-9]+$ ]] || die "--watch takes whole seconds, got: $watch"
+    [[ "$watch" -ge 1 ]] || die "--watch must be at least 1 second"
+    [[ "$prune" == no ]] || die "--watch and --prune do not combine: prune deletes files, and a
+       watch loop would do it on every tick. Prune once, deliberately, then watch."
+    [[ "$as_json" == no ]] || die "--watch and --json do not combine: a repeating render is a
+       stream of documents, not one valid JSON document. Loop it yourself instead:
+         while :; do cs fleet --json; sleep $watch; done"
+    trap 'printf "\n"; exit 130' INT TERM
+  fi
+
+  # The fleet belongs to the repository this cs is installed in, not to the cwd,
+  # so `cs fleet` answers for THIS repo from anywhere — same anchor as cs board.
+  local repo; repo="$(cd "$ROOT/.." && pwd)"
+  local tty=no; [[ -t 1 ]] && tty=yes
+
+  local rc=0
+  while :; do
+    if [[ -n "$watch" && "$tty" == yes ]]; then printf '\033[2J\033[H'; fi
+    rc=0
+    CS_F_LEDGER="$LEDGER" CS_F_FLEET="$STATE_DIR/fleet" CS_F_REPO="$repo" \
+    CS_F_JSON="$as_json" CS_F_STALE="$stale" CS_F_REMOTE="$remote" \
+    CS_F_PRUNE="$prune" CS_F_DRY="$dry" CS_F_TTY="$tty" \
+    python3 - <<'PY' || rc=$?
+import datetime as dt, json, os, re, subprocess, sys
+
+LEDGER = os.environ["CS_F_LEDGER"]
+FLEET  = os.environ["CS_F_FLEET"]
+REPO   = os.environ["CS_F_REPO"]
+ASJSON = os.environ.get("CS_F_JSON") == "yes"
+STALE  = int(os.environ.get("CS_F_STALE") or 15)
+REMOTE = os.environ.get("CS_F_REMOTE") == "yes"
+PRUNE  = os.environ.get("CS_F_PRUNE") == "yes"
+DRY    = os.environ.get("CS_F_DRY") == "yes"
+TTY    = os.environ.get("CS_F_TTY") == "yes"
+NOW    = dt.datetime.now(dt.timezone.utc)
+
+BOLD = "\033[1m" if TTY else ""
+RED  = "\033[31m" if TTY else ""
+YEL  = "\033[33m" if TTY else ""
+DIM  = "\033[2m"  if TTY else ""
+OFF  = "\033[0m"  if TTY else ""
+
+# The status vocabulary this version understands. Anything else is UNKNOWN and is
+# reported as unknown — never silently folded into "working", which would turn a
+# schema the emitter moved on to into a green row.
+KNOWN  = ("starting", "working", "blocked", "waiting", "done", "failed")
+RANK   = {"blocked": 0, "failed": 1, "untrusted": 2, "unknown": 3,
+          "waiting": 4, "starting": 5, "working": 6, "done": 7}
+
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*(?:\x07|$)")
+
+def clean(v, limit=400):
+    """Heartbeats are written by a cloud agent we do not control. Strip escape
+    sequences and control characters before they reach the operator's terminal:
+    otherwise a blocker's `detail` can repaint the screen or forge a green row."""
+    if v is None:
+        return ""
+    s = v if isinstance(v, str) else json.dumps(v, default=str)
+    s = _ANSI.sub("", s)
+    s = "".join(c if (c == "\t" or (c >= " " and c != "\x7f")) else " " for c in s)
+    s = " ".join(s.split())
+    if len(s) > limit:
+        s = s[: limit - 1] + "…"
+    return s
+
+def parse_ts(text):
+    if not text or not isinstance(text, str):
+        return None
+    t = text.strip()
+    if t.endswith("Z"):
+        t = t[:-1] + "+00:00"
+    try:
+        s = dt.datetime.fromisoformat(t)
+    except ValueError:
+        return None
+    return s if s.tzinfo else s.replace(tzinfo=dt.timezone.utc)
+
+def age_min(stamp):
+    if stamp is None:
+        return None
+    return (NOW - stamp).total_seconds() / 60.0
+
+def age_str(m):
+    if m is None:    return "?"
+    if m < 0:        return "future"
+    if m < 60:       return "%dm" % m
+    if m < 2880:     return "%dh" % (m / 60)
+    return "%dd" % (m / 1440)
+
+def git(args, timeout=25):
+    """Returns (stdout, err). Never raises: every caller degrades instead."""
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_ASKPASS"] = "echo"
+    env["SSH_ASKPASS"] = "echo"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    try:
+        r = subprocess.run(["git", "-C", REPO] + list(args), capture_output=True,
+                           text=True, timeout=timeout, env=env)
+    except Exception as exc:
+        return None, str(exc)
+    if r.returncode != 0:
+        tail = [l for l in (r.stderr or "").strip().splitlines() if l.strip()]
+        return None, (tail[-1] if tail else "git %s exited %d" % (args[0], r.returncode))
+    return r.stdout, ""
+
+def build():
+    sources = {}
+
+    # --- (1) the ledger ----------------------------------------------------
+    led, led_bad = [], 0
+    try:
+        with open(LEDGER) as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    led_bad += 1
+                    continue
+                led.append(row if isinstance(row, dict) else {"_nonobject": True})
+        sources["ledger"] = {"status": "ok", "detail": "%d row(s)%s" % (
+            len(led), ", %d unreadable" % led_bad if led_bad else "")}
+        if led_bad:
+            sources["ledger"] = {"status": "degraded", "detail":
+                "%d row(s) read, %d unreadable — the ledger is append-only and one write "
+                "was interrupted; a dispatched agent may be missing from this view" % (len(led), led_bad)}
+    except FileNotFoundError:
+        sources["ledger"] = {"status": "empty",
+                             "detail": "%s does not exist — nothing dispatched from this machine" % LEDGER}
+    except OSError as exc:
+        sources["ledger"] = {"status": "degraded", "detail": str(exc)}
+
+    # Keep the LAST row per session id: `cs track` can restate a dispatch.
+    by_id = {}
+    order = []
+    for row in led:
+        sid = row.get("id")
+        if not sid:
+            continue
+        if sid not in by_id:
+            order.append(sid)
+        by_id[sid] = row
+
+    repo_name = os.path.basename(REPO)
+
+    # --- (2) the heartbeats ------------------------------------------------
+    # Two places, because an agent's heartbeat is pushed to ITS branch: until
+    # someone merges, this checkout's state/fleet/ is empty and the real
+    # heartbeat sits on refs/remotes/origin/claude/<lane>. Reading the ref is
+    # offline and read-only. Both are labelled; the newer timestamp wins.
+    cands = {}   # sid -> [record, ...]
+
+    def add_cand(sid, rec):
+        cands.setdefault(sid, []).append(rec)
+
+    def decode(text, origin, origin_note):
+        rec = {"origin": origin, "origin_note": origin_note, "raw": None,
+               "degraded": False, "degraded_reason": ""}
+        try:
+            d = json.loads(text)
+        except ValueError as exc:
+            rec["degraded"] = True
+            rec["degraded_reason"] = "unparseable JSON: %s" % exc
+            rec["excerpt"] = clean(text, 160)
+            return rec
+        if not isinstance(d, dict):
+            rec["degraded"] = True
+            rec["degraded_reason"] = "heartbeat is %s, not a JSON object" % type(d).__name__
+            return rec
+        rec["raw"] = d
+        return rec
+
+    FLEET_NS = os.environ.get("CS_FLEET_NS", "cloud-fleet")
+    hb_bad = 0
+    fleet_files = []
+    fleet_status, fleet_detail = "ok", ""
+    try:
+        names = sorted(os.listdir(FLEET))
+    except FileNotFoundError:
+        names = None
+        fleet_status = "empty"
+        fleet_detail = ("%s does not exist — no cloud agent has written a heartbeat into "
+                        "THIS checkout" % FLEET)
+    except OSError as exc:
+        names = None
+        fleet_status = "degraded"
+        fleet_detail = str(exc)
+    if names is not None:
+        for name in names:
+            if not name.endswith(".json"):
+                continue
+            path = os.path.join(FLEET, name)
+            sid = name[:-5]
+            fleet_files.append(path)
+            try:
+                with open(path) as fh:
+                    text = fh.read()
+            except OSError as exc:
+                hb_bad += 1
+                add_cand(sid, {"origin": "worktree", "origin_note": path, "raw": None,
+                               "degraded": True, "degraded_reason": "unreadable: %s" % exc})
+                continue
+            rec = decode(text, "worktree", path)
+            rec["path"] = path
+            if rec["degraded"]:
+                hb_bad += 1
+            add_cand(sid, rec)
+        if fleet_status == "ok":
+            fleet_detail = "%d heartbeat file(s) in %s%s" % (
+                len(fleet_files), FLEET, ", %d unreadable" % hb_bad if hb_bad else "")
+            if hb_bad:
+                fleet_status = "degraded"
+            elif not fleet_files:
+                fleet_status = "empty"
+                fleet_detail = "%s is empty — no cloud agent has reported into THIS checkout" % FLEET
+
+    # heartbeats carried on each lane's remote-tracking branch
+    ref_seen, ref_missing, ref_read = [], [], 0
+    rel = os.path.relpath(FLEET, REPO)
+    if rel.startswith(".."):
+        ref_note = ("state/fleet is outside the repository (%s) — branch-carried heartbeats "
+                    "cannot be read" % rel)
+    else:
+        ref_note = ""
+        branches = []
+        # The emitter (bin/cloud-heartbeat.sh) pushes beats to its OWN namespace,
+        # refs/heads/cloud-fleet/<session-id> — deliberately NOT the lane branch, so
+        # telemetry commits never interleave with the agent's real work. Scanning only
+        # the lane branches (as this did until 2026-08-19) meant a blocked agent that
+        # emitted correctly still rendered "never reported": the blocker was pushed and
+        # invisible. That is the exact silent-success this folder exists to prevent, so
+        # the emitter's namespace is scanned FIRST and is the primary source.
+        out, _ = git(["for-each-ref", "--format=%(refname)",
+                      "refs/remotes/origin/" + FLEET_NS + "/"])
+        for line in (out or "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            b = line.replace("refs/remotes/origin/", "", 1)
+            if b not in branches:
+                branches.append(b)
+        for sid in order:
+            b = by_id[sid].get("expect_branch")
+            if b and b not in branches:
+                branches.append(b)
+        for b in branches:
+            ref = "refs/remotes/origin/" + b
+            out, err = git(["ls-tree", "-r", "--name-only", ref, "--", rel])
+            if out is None:
+                ref_missing.append(b)
+                continue
+            ref_seen.append(b)
+            for p in [l.strip() for l in out.splitlines() if l.strip()]:
+                blob, berr = git(["show", "%s:%s" % (ref, p)])
+                base = os.path.basename(p)
+                if not base.endswith(".json"):
+                    continue
+                sid_f = base[:-5]
+                note = "origin/%s:%s (remote-tracking ref — as stale as your last fetch)" % (b, p)
+                if blob is None:
+                    add_cand(sid_f, {"origin": "ref", "origin_note": note, "raw": None,
+                                     "degraded": True, "degraded_reason": "unreadable on ref: %s" % berr})
+                    continue
+                rec = decode(blob, "ref", note)
+                rec["ref"] = ref
+                ref_read += 1
+                add_cand(sid_f, rec)
+
+    parts = []
+    if fleet_detail:
+        parts.append(fleet_detail)
+    if ref_note:
+        parts.append(ref_note)
+    elif ref_seen or ref_missing:
+        parts.append("%d from lane ref(s)%s" % (
+            ref_read,
+            "; %d expected ref(s) not fetched here: %s" % (
+                len(ref_missing), ", ".join(ref_missing[:4]) + ("…" if len(ref_missing) > 4 else ""))
+            if ref_missing else ""))
+    if ref_read and fleet_status == "empty":
+        fleet_status = "ok"
+    sources["heartbeats"] = {"status": fleet_status, "detail": "; ".join(parts) or "none"}
+
+    # --- (3) the branches --------------------------------------------------
+    heads = {}
+    if not REMOTE:
+        sources["branches"] = {"status": "skipped",
+                               "detail": "--no-remote — branch existence NOT checked "
+                                         "(a skipped check is not a passed check)"}
+    else:
+        out, err = git(["ls-remote", "--heads", "origin"], timeout=30)
+        if out is None:
+            sources["branches"] = {"status": "degraded",
+                                   "detail": "git ls-remote failed: %s — branch facts below read '?', "
+                                             "not 'missing'" % clean(err, 160)}
+        else:
+            for line in out.splitlines():
+                bits = line.split()
+                if len(bits) == 2 and bits[1].startswith("refs/heads/"):
+                    heads[bits[1][len("refs/heads/"):]] = bits[0]
+            sources["branches"] = {"status": "ok", "detail": "%d head(s) on origin" % len(heads)}
+
+    tip_cache = {}
+    def tip_age(sha):
+        if sha in tip_cache:
+            return tip_cache[sha]
+        out, _ = git(["log", "-1", "--format=%cI", sha], timeout=10)
+        res = age_min(parse_ts((out or "").strip())) if out else None
+        tip_cache[sha] = res
+        return res
+
+    # --- merge -------------------------------------------------------------
+    def pick(sid):
+        """Newest parseable heartbeat wins; a worktree copy breaks a tie."""
+        recs = cands.get(sid) or []
+        if not recs:
+            return None, []
+        def key(r):
+            ts = parse_ts((r.get("raw") or {}).get("ts")) if r.get("raw") else None
+            return (ts is not None, ts or dt.datetime.min.replace(tzinfo=dt.timezone.utc),
+                    r.get("origin") == "worktree")
+        ranked = sorted(recs, key=key, reverse=True)
+        return ranked[0], ranked[1:]
+
+    agents = []
+    seen_hb = set()
+
+    def make(sid, ledger_row):
+        rec, others = pick(sid)
+        seen_hb.add(sid)
+        a = {
+            "session_id": sid,
+            "lane": (ledger_row or {}).get("lane") or "-",
+            "title": clean((ledger_row or {}).get("title"), 120),
+            "owns": (ledger_row or {}).get("owns") or [],
+            "brief": (ledger_row or {}).get("brief") or "",
+            "trigger_id": (ledger_row or {}).get("trigger_id") or "",
+            "expect_branch": (ledger_row or {}).get("expect_branch") or "",
+            "url": (ledger_row or {}).get("url") or "",
+            "dispatched": (ledger_row or {}).get("ts") or "",
+            "dispatched_age_min": None,
+            "ledger_repo": (ledger_row or {}).get("repo") or "",
+            "in_ledger": ledger_row is not None,
+            "foreign_repo": False,
+            "heartbeat": None,
+            "heartbeat_source": None,
+            "heartbeat_origin_note": None,
+            "other_heartbeats": [r.get("origin_note") for r in others],
+            "status": None,
+            "status_known": False,
+            "phase": "", "note": "", "progress": None, "blocker": None,
+            "commit": "", "branch": "",
+            "hb_ts": None, "hb_age_min": None,
+            "stale": False, "stale_reason": "",
+            "degraded": False, "degraded_reason": "",
+            "notes": [],
+            "schema": None,
+            "branch_on_origin": None, "branch_sha": None, "branch_tip_age_min": None,
+        }
+        d_age = age_min(parse_ts(a["dispatched"]))
+        a["dispatched_age_min"] = None if d_age is None else round(d_age, 1)
+        if a["ledger_repo"] and repo_name and a["ledger_repo"] not in ("-", repo_name):
+            a["foreign_repo"] = True
+            a["notes"].append("ledger row belongs to repo '%s', not '%s' — its branch is on "
+                              "another origin and is NOT checked here" % (a["ledger_repo"], repo_name))
+
+        if rec is None:
+            a["status"] = "no-heartbeat"
+            a["degraded_reason"] = ("no heartbeat — this agent has never reported, or "
+                                    "predates the emitter")
+        elif rec.get("degraded"):
+            a["status"] = "untrusted"
+            a["degraded"] = True
+            a["degraded_reason"] = rec.get("degraded_reason", "unreadable heartbeat")
+            a["heartbeat_source"] = rec.get("origin")
+            a["heartbeat_origin_note"] = rec.get("origin_note")
+        else:
+            d = rec["raw"]
+            a["heartbeat"] = d
+            a["heartbeat_source"] = rec.get("origin")
+            a["heartbeat_origin_note"] = rec.get("origin_note")
+            a["schema"] = d.get("schema")
+            declared = d.get("session_id")
+            if isinstance(declared, str) and declared and declared != sid:
+                # Provenance unknown: this file is named for one agent and claims
+                # another. Attributing it either way invents a fact. Refuse.
+                a["status"] = "untrusted"
+                a["degraded"] = True
+                a["degraded_reason"] = ("heartbeat filed as '%s' declares session_id '%s' — "
+                                        "provenance unknown, so its status is attributed to "
+                                        "NEITHER agent" % (sid, clean(declared, 60)))
+                return a
+            if isinstance(a["schema"], int) and a["schema"] > 1:
+                a["notes"].append("heartbeat schema %d is newer than this cs understands (1) — "
+                                  "unknown fields are carried through --json untouched" % a["schema"])
+            elif a["schema"] is None:
+                a["notes"].append("heartbeat carries no schema field; read as schema 1")
+            raw_status = d.get("status")
+            st = raw_status.strip().lower() if isinstance(raw_status, str) else ""
+            if st in KNOWN:
+                a["status"], a["status_known"] = st, True
+            else:
+                a["status"] = "unknown"
+                a["notes"].append("heartbeat status %s is not one of %s — reported as UNKNOWN "
+                                  "rather than assumed healthy" % (json.dumps(raw_status), "/".join(KNOWN)))
+            a["phase"] = clean(d.get("phase"), 60)
+            a["note"] = clean(d.get("note"), 200)
+            a["commit"] = clean(d.get("commit"), 40)
+            a["branch"] = clean(d.get("branch"), 80)
+            prog = d.get("progress")
+            if isinstance(prog, dict):
+                a["progress"] = {"done": prog.get("done"), "total": prog.get("total")}
+            elif prog is not None:
+                a["notes"].append("progress is not an object; ignored")
+            blk = d.get("blocker")
+            if isinstance(blk, dict):
+                a["blocker"] = {"kind": clean(blk.get("kind"), 80) or "NOT REPORTED",
+                                "detail": clean(blk.get("detail"), 2000) or "NOT REPORTED",
+                                "needs": clean(blk.get("needs"), 2000) or "NOT REPORTED"}
+            elif blk is not None:
+                a["notes"].append("blocker is not an object (%s) — cannot be read" % type(blk).__name__)
+            if a["status"] == "blocked" and a["blocker"] is None:
+                a["blocker"] = {"kind": "NOT REPORTED", "detail": "NOT REPORTED",
+                                "needs": "NOT REPORTED — the agent reported blocked without "
+                                         "saying what it needs; ask it: cs send %s \"what are you "
+                                         "blocked on?\"" % sid}
+                a["notes"].append("status=blocked with no blocker object")
+            if a["blocker"] is not None and a["status"] not in ("blocked", "waiting"):
+                a["notes"].append("a blocker is present while status is %s — shown, not hidden"
+                                  % a["status"])
+            hb_lane = d.get("lane")
+            if isinstance(hb_lane, str) and hb_lane and a["lane"] not in ("-", hb_lane):
+                a["notes"].append("heartbeat says lane '%s'; the ledger says '%s'"
+                                  % (clean(hb_lane, 40), a["lane"]))
+            if a["lane"] == "-" and isinstance(hb_lane, str) and hb_lane:
+                a["lane"] = clean(hb_lane, 40)
+            ts = parse_ts(d.get("ts"))
+            a["hb_ts"] = d.get("ts") if isinstance(d.get("ts"), str) else None
+            m = age_min(ts)
+            a["hb_age_min"] = None if m is None else round(m, 1)
+            if m is None:
+                a["stale"] = True
+                a["stale_reason"] = ("no parseable ts — freshness cannot be established, so this "
+                                     "is treated as a claim, not proof")
+            elif m > STALE:
+                a["stale"] = True
+                a["stale_reason"] = "last report %s ago, older than the %dm threshold" % (age_str(m), STALE)
+            if others:
+                a["notes"].append("%d other copy/copies of this heartbeat exist (%s); the newest "
+                                  "ts won" % (len(others), "; ".join(str(o) for o in a["other_heartbeats"])[:200]))
+
+        b = a["expect_branch"]
+        if b and not a["foreign_repo"]:
+            if sources["branches"]["status"] == "ok":
+                sha = heads.get(b)
+                a["branch_on_origin"] = sha is not None
+                a["branch_sha"] = sha
+                if sha:
+                    t = tip_age(sha)
+                    a["branch_tip_age_min"] = None if t is None else round(t, 1)
+            # degraded/skipped leaves branch_on_origin None, which renders "?"
+        return a
+
+    for sid in order:
+        agents.append(make(sid, by_id[sid]))
+    for sid in sorted(cands):
+        if sid not in seen_hb:
+            a = make(sid, None)
+            a["notes"].append("heartbeat with no ledger row — this agent was not dispatched from "
+                              "this machine, or its ledger row was removed with cs rm")
+            agents.append(a)
+
+    def sort_key(a):
+        r = RANK.get(a["status"], 8 if a["status"] != "no-heartbeat" else 9)
+        return (r, 0 if a["stale"] else 1,
+                -(a["hb_age_min"] if a["hb_age_min"] is not None else 10 ** 9))
+    agents.sort(key=sort_key)
+
+    counts = {"total": len(agents)}
+    for k in ("blocked", "failed", "waiting", "working", "starting", "done",
+              "unknown", "untrusted", "no-heartbeat"):
+        counts[k] = sum(1 for a in agents if a["status"] == k)
+    counts["stale"] = sum(1 for a in agents if a["stale"])
+    counts["unledgered"] = sum(1 for a in agents if not a["in_ledger"])
+
+    degraded_src = [n for n, s in sources.items() if s["status"] == "degraded"]
+    if counts["blocked"]:
+        code = 3
+    elif counts["failed"]:
+        code = 4
+    elif degraded_src or counts["untrusted"]:
+        code = 1
+    else:
+        code = 0
+
+    return {"schema": 1,
+            "as_of": NOW.replace(microsecond=0).isoformat(),
+            "repo": REPO, "stale_after_min": STALE,
+            "sources": sources, "counts": counts, "agents": agents,
+            "prune": None, "exit_code": code}
+
+def do_prune(model):
+    """Deliberate, flagged, and narrow. Removes a heartbeat file only when the
+    session's provenance is KNOWN and the run is over:
+      * the ledger row marks it finished, or
+      * the agent's own last word was status=done AND a ledger row exists.
+    Never `failed` (its last words are the reason you would look), never blocked,
+    waiting, working, starting, unknown, untrusted, stale-but-live, and never a
+    heartbeat with no ledger row at all. Refusals are printed with their reason."""
+    removed, refused = [], []
+    fleet_real = os.path.realpath(FLEET)
+    for a in model["agents"]:
+        note = a.get("heartbeat_origin_note")
+        if a["heartbeat_source"] != "worktree" or not note:
+            continue                      # only this checkout's files are ours to delete
+        why = a.get("finished_reason")
+        if not why:
+            refused.append({"session_id": a["session_id"], "path": note,
+                            "reason": "status %s — prune only drops finished runs" % a["status"]})
+            continue
+        real = os.path.realpath(note)
+        if not real.startswith(fleet_real + os.sep) or os.path.islink(note) or not os.path.isfile(note):
+            refused.append({"session_id": a["session_id"], "path": note,
+                            "reason": "not a regular file inside %s — refused" % FLEET})
+            continue
+        if DRY:
+            removed.append({"session_id": a["session_id"], "path": note, "reason": why,
+                            "removed": False})
+            continue
+        try:
+            os.remove(real)
+            removed.append({"session_id": a["session_id"], "path": note, "reason": why,
+                            "removed": True})
+        except OSError as exc:
+            refused.append({"session_id": a["session_id"], "path": note,
+                            "reason": "could not remove: %s" % exc})
+    return {"dry_run": DRY, "removed": removed, "refused": refused}
+
+def mark_finished(model, ledger_rows_by_id):
+    for a in model["agents"]:
+        row = ledger_rows_by_id.get(a["session_id"])
+        why = None
+        if row is not None:
+            if row.get("finished") is True:
+                why = "ledger row carries finished:true"
+            else:
+                st = str(row.get("status") or "").strip().lower()
+                if st in ("done", "finished", "ended", "complete", "completed"):
+                    why = "ledger row carries status=%s" % st
+                elif row.get("ended_at") or row.get("ended"):
+                    why = "ledger row carries an end timestamp"
+            if why is None and a["status"] == "done":
+                why = ("the agent's own last heartbeat says status=done and the ledger "
+                       "knows this session")
+        a["finished_reason"] = why
+
+def render(model):
+    S = model["sources"]
+    print("%scs fleet%s — %s · as of %s · stale after %dm"
+          % (BOLD, OFF, os.path.basename(model["repo"]), model["as_of"], model["stale_after_min"]))
+    label = {"ok": "ok", "empty": "EMPTY", "degraded": "DEGRADED", "skipped": "SKIPPED"}
+    for name in ("ledger", "heartbeats", "branches"):
+        s = S[name]
+        col = RED if s["status"] == "degraded" else (YEL if s["status"] in ("empty", "skipped") else "")
+        print("  %-11s %s%-9s%s %s" % (name, col, label[s["status"]], OFF, s["detail"]))
+    if any(S[n]["status"] != "ok" for n in S):
+        print("  a DEGRADED, EMPTY or SKIPPED source makes this view PARTIAL, not empty — absence")
+        print("  below is not proof that an agent is fine.")
+    print()
+
+    c = model["counts"]
+    blocked = [a for a in model["agents"] if a["status"] == "blocked"]
+    failed  = [a for a in model["agents"] if a["status"] == "failed"]
+    untrust = [a for a in model["agents"] if a["status"] == "untrusted"]
+    nohb    = [a for a in model["agents"] if a["status"] == "no-heartbeat"]
+    live    = [a for a in model["agents"] if a["status"] not in ("no-heartbeat", "untrusted")]
+
+    if blocked:
+        print("%s%s!! %d AGENT(S) BLOCKED — each needs a human. cs fleet exits 3.%s"
+              % (BOLD, RED, len(blocked), OFF))
+        for a in blocked:
+            print("%s  !! %s  %s  blocked, last report %s%s%s"
+                  % (RED, a["lane"], a["session_id"], age_str(a["hb_age_min"]),
+                     " (STALE)" if a["stale"] else "", OFF))
+            b = a["blocker"]
+            print("       kind   : %s" % b["kind"])
+            print("       detail : %s" % b["detail"])
+            print("       needs  : %s" % b["needs"])
+            print("       source : %s" % (a["heartbeat_origin_note"] or "?"))
+            if a["url"]:
+                print("       steer  : cs send %s \"…\"   %s" % (a["session_id"], a["url"]))
+        print()
+    if failed:
+        print("%s%s!! %d AGENT(S) FAILED — the run ended badly. cs fleet exits 4 (3 wins if "
+              "anything is also blocked).%s" % (BOLD, RED, len(failed), OFF))
+        for a in failed:
+            print("     %s  %s  %s" % (a["lane"], a["session_id"], a["note"] or a["phase"] or ""))
+        print()
+
+    if live:
+        fmt = "  %-2s %-20.20s %-26.26s %-9.9s %6.6s %-16.16s %-7.7s %s"
+        print(fmt % ("", "LANE", "SESSION", "STATUS", "AGE", "PHASE", "PROG", "BRANCH"))
+        for a in live:
+            mark = "!!" if a["status"] == "blocked" else ("!" if a["status"] in ("failed", "unknown") else "")
+            age = age_str(a["hb_age_min"]) + ("*" if a["stale"] else "")
+            prog = ""
+            if a["progress"] and a["progress"].get("total") not in (None, ""):
+                prog = "%s/%s" % (a["progress"].get("done"), a["progress"].get("total"))
+            if a["branch_on_origin"] is True:
+                br = "%s on origin, tip %s" % (a["expect_branch"], age_str(a["branch_tip_age_min"]))
+            elif a["branch_on_origin"] is False:
+                br = "%s NOT on origin yet" % a["expect_branch"]
+            elif a["expect_branch"]:
+                br = "%s ?" % a["expect_branch"]
+            else:
+                br = a["branch"] or "-"
+            line = fmt % (mark, a["lane"], a["session_id"], a["status"].upper(), age,
+                          a["phase"], prog, br)
+            if a["status"] == "blocked":
+                line = RED + line + OFF
+            elif a["stale"] or a["status"] == "unknown":
+                line = YEL + line + OFF
+            print(line)
+            for n in a["notes"]:
+                print("       %s- %s%s" % (DIM, n, OFF))
+        print()
+        print("  %sage* = heartbeat older than %dm (or undateable): a CLAIM, not proof — the agent"
+              % (DIM, model["stale_after_min"]))
+        print("  may be fine and silent, or dead. STALE is not BLOCKED and never sets the exit code.%s" % OFF)
+        print()
+
+    if untrust:
+        print("%sREFUSED — %d heartbeat(s) whose provenance is unknown. Not attributed to any"
+              % (YEL, len(untrust)))
+        print("agent, in either direction:%s" % OFF)
+        for a in untrust:
+            print("  %-26s %s" % (a["session_id"], a["degraded_reason"]))
+            print("      %s" % (a["heartbeat_origin_note"] or "?"))
+        print()
+
+    if nohb:
+        print("NO HEARTBEAT (%d) — in the ledger, never seen reporting:" % len(nohb))
+        for a in nohb:
+            d = a["dispatched_age_min"]
+            when = ("dispatched %s ago" % age_str(d)) if d is not None else "dispatch time unknown"
+            fresh = (d is not None and d <= model["stale_after_min"])
+            why = "no heartbeat — this agent has never reported, or predates the emitter"
+            if fresh:
+                why += " (dispatched under %dm ago; it may not have started reporting yet)" % model["stale_after_min"]
+            if a["branch_on_origin"] is True:
+                bs = "%s IS on origin (tip %s) — it produced work" % (
+                    a["expect_branch"], age_str(a["branch_tip_age_min"]))
+            elif a["branch_on_origin"] is False:
+                bs = "%s not on origin" % a["expect_branch"]
+            elif a["expect_branch"]:
+                bs = "%s: unchecked" % a["expect_branch"]
+            else:
+                bs = "no expected branch recorded"
+            print("  %-20.20s %-26s %s" % (a["lane"], a["session_id"], when))
+            print("      %s; %s" % (why, bs))
+            for n in a["notes"]:
+                print("      - %s" % n)
+        print()
+        print("  %sheartbeats are pushed to the agent's OWN branch. If one of these should be"
+              % DIM)
+        print("  reporting, fetch its lane ref and look again:")
+        print("      git fetch origin '+refs/heads/*:refs/remotes/origin/*' && cs fleet%s" % OFF)
+        print()
+
+    print("%d agent(s): %d blocked, %d failed, %d working, %d waiting, %d starting, %d done, "
+          "%d unknown, %d untrusted, %d never reported; %d stale."
+          % (c["total"], c["blocked"], c["failed"], c["working"], c["waiting"], c["starting"],
+             c["done"], c["unknown"], c["untrusted"], c["no-heartbeat"], c["stale"]))
+    print("exit 0 = nothing reported blocked. It does NOT mean every agent is fine: an agent that")
+    print("never reports cannot be seen here at all.  3 = blocked  4 = failed  1 = a source is")
+    print("DEGRADED or a heartbeat is untrusted  130 = --watch interrupted.")
+
+def render_prune(p):
+    print("%scs fleet --prune%s%s" % (BOLD, " --dry-run" if p["dry_run"] else "", OFF))
+    if not p["removed"] and not p["refused"]:
+        print("  nothing to consider: no heartbeat files in this checkout.")
+    for r in p["removed"]:
+        print("  %s %-26s %s" % ("would remove" if p["dry_run"] else "removed     ",
+                                 r["session_id"], r["path"]))
+        print("      because %s" % r["reason"])
+    for r in p["refused"]:
+        print("  kept        %-26s %s" % (r["session_id"], r["reason"]))
+    print("  prune drops a heartbeat only when the ledger marks the session finished, or the")
+    print("  agent's own last word was status=done and the ledger knows it. A failed agent's")
+    print("  heartbeat is never dropped — its last words are the reason you would look.")
+    print()
+
+try:
+    model = build()
+except Exception as exc:
+    if ASJSON:
+        print(json.dumps({"schema": 1, "as_of": NOW.replace(microsecond=0).isoformat(),
+                          "repo": REPO, "stale_after_min": STALE,
+                          "sources": {"fleet": {"status": "degraded",
+                                                "detail": "cs fleet could not build its model: %r" % exc}},
+                          "counts": {}, "agents": [], "prune": None, "exit_code": 1}, indent=2))
+        sys.exit(1)
+    raise
+
+_by_id = {}
+try:
+    with open(LEDGER) as fh:
+        for line in fh:
+            if line.strip():
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(row, dict) and row.get("id"):
+                    _by_id[row["id"]] = row
+except OSError:
+    pass
+mark_finished(model, _by_id)
+
+if PRUNE:
+    model["prune"] = do_prune(model)
+
+if ASJSON:
+    print(json.dumps(model, indent=2, default=str))
+    sys.exit(model["exit_code"])
+
+if PRUNE:
+    render_prune(model["prune"])
+render(model)
+sys.exit(model["exit_code"])
+PY
+    if [[ -z "$watch" ]]; then break; fi
+    printf '\n%s— cs fleet --watch %ss · last exit %s · Ctrl-C to stop%s\n' "$DIM" "$watch" "$rc" "$OFF"
+    sleep "$watch"
+  done
+  return $rc
+}
+
+cmd_open() { local id; id="$(resolve_id "${1:-last}")"; open_url "https://claude.ai/code/$id"; }
+cmd_web()  { open_url "https://claude.ai/code"; }
+
+cmd_tp() {
+  require_claude
+  local id; id="$(resolve_id "${1:-last}")"
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "teleport must run from a checkout of the session's repository"
+  [[ -z "$(git status --porcelain)" ]] || die "teleport requires a clean working tree. Commit or stash first."
+  exec "$CLAUDE" --teleport "$id"
+}
+
+cmd_rc() { require_claude; exec "$CLAUDE" --remote-control ${1:+"$1"}; }
+
+usage() {
+  cat <<'EOF'
+cs — deliberate driver for Claude Code cloud sessions
+
+  cs new ["<task>"]                START HERE — asks whether to run here or in the cloud
+       [--here | --cloud | --plan <f>]   …or say which, for scripts
+  cs doctor                        preflight every gate; fix what it flags before dispatching
+  cs handoff "<what to continue>"  compose a brief from the current repo state and dispatch
+       [--plan <committed file>]   point the session at a plan you already wrote
+  cs start "<task>"                dispatch to a cloud VM and return (needs a real terminal)
+       [--bundle]                  upload the local repo instead of cloning from GitHub
+       [--env <ccpool_…>]          run on a SELF-HOSTED environment (Team/Enterprise)
+  cs sessions [--json]             live local sessions, and whether each COULD move to the cloud
+  cs board [--json]                the master view: board lanes + local sessions + worktrees
+                                   + cloud dispatches, merged on session id, one screen
+  cs fleet [--json]                the CLOUD counterpart of board: every agent running on a
+       [--stale-after N]           cloud VM, merged from the dispatch ledger, the agents' own
+       [--watch N]                 heartbeat files, and origin's branches — each fact tagged
+       [--no-remote]               with the source it came from. A BLOCKED agent sorts first,
+       [--prune [--dry-run]]       is marked, and exits 3 so a wrapper can act on it
+  cs claim [--dry-run]             declare what THIS session is working on: derives its
+       [--goal "<text>"]           owns-claims from its own transcript's Write/Edit calls,
+       [--add <path>]…             checks them through the board's overlap gate, and
+       [--session <id>]            registers them. Presence makes a session visible;
+                                   THIS is what makes it movable by cs exodus
+  cs exodus [--dry-run]            partition the dirty tree by the board's owns-claims into
+       [--manifest <path>]         per-lane claude/<lane> branches + a dispatch manifest.
+                                   Prepares the aggregate move; dispatches NOTHING (/cloud all does)
+  cs env [set <id>|clear]          which environment dispatches use, and how much internet
+  cs shell-init                    print a shell function so bare `claude` here asks first
+  cs send <id|last> "<msg>"        steer a running session; works headless, laptop shut
+  cs ls [--json]                   list sessions dispatched from this machine
+  cs track <id> ["title"]          record a session started on the web or phone
+       [--lane L --owns P --from S    provenance: which lane, paths, source session,
+        --brief F --trigger T          committed brief, routine id, and the branch
+        --expect-branch B]             its output should appear on
+  cs rm <id>                       forget a session locally (does NOT stop it)
+  cs open [id|last]                open the session at claude.ai/code
+  cs web                           open the full session list
+  cs tp [id|last]                  teleport the session back into this terminal
+  cs rc ["name"]                   Remote Control: keep a LOCAL session, drive it from your phone
+
+`last` refers to the most recent dispatch. Set CS_DEFAULT=cloud (or here, rc, ask) to
+answer `cs new` once instead of every time; an explicit flag still wins.
+
+Full guide: ../README.md
+
+There is no `cs stop`. Anthropic exposes no CLI or API call that stops a running cloud
+session. To wind one down: `cs send <id> "stop here and summarise what you did"`, then
+archive it from claude.ai/code. `cs rm` only forgets it locally.
+EOF
+}
+
+case "${1:-}" in
+  new)    shift; cmd_new "$@" ;;
+  doctor) shift; cmd_doctor "$@" ;;
+  start)  shift; cmd_start "$@" ;;
+  handoff) shift; cmd_handoff "$@" ;;
+  env)    shift; cmd_env "$@" ;;
+  sessions) shift; cmd_sessions "$@" ;;
+  board)  shift; cmd_board "$@" ;;
+  fleet)  shift; cmd_fleet "$@" ;;
+  claim)  shift; cmd_claim "$@" ;;
+  exodus) shift; cmd_exodus "$@" ;;
+  shell-init) shift; cmd_shell_init "$@" ;;
+  send)   shift; cmd_send "$@" ;;
+  ls)     shift; cmd_ls "$@" ;;
+  track)  shift; cmd_track "$@" ;;
+  rm)     shift; cmd_rm "$@" ;;
+  open)   shift; cmd_open "$@" ;;
+  web)    shift; cmd_web "$@" ;;
+  tp|teleport) shift; cmd_tp "$@" ;;
+  rc|remote-control) shift; cmd_rc "$@" ;;
+  ""|-h|--help|help) usage ;;
+  *) die "unknown command: $1 (try: cs help)" ;;
+esac

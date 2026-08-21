@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# fake-gh — stand-in for the GitHub CLI, installed on PATH as `gh` by the suite.
+#
+# `cs doctor` shells out to `gh auth status`, which contacts github.com to validate
+# the token. Shadowing it keeps the suite offline and keeps the result independent
+# of whether the operator happens to be logged in right now.
+#
+#   FAKE_GH_FAIL=1   report an unauthenticated gh (exit 1, no output)
+
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
+  [ -n "$FAKE_GH_FAIL" ] && exit 1
+  echo "✓ Logged in to github.com account faketester (keyring)"
+  echo "  Token scopes: 'gist', 'read:org', 'repo'"
+  exit 0
+fi
+exit 1

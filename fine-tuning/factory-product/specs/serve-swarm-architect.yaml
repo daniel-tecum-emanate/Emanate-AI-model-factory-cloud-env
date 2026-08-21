@@ -1,0 +1,41 @@
+slug: serve-swarm-architect
+role_family: shadow
+mission: Specify lane serving envelopes, shadow validity, teardown, cost, predicates, and full-config rollback proof.
+stages: [S7, S8, S9, S10]
+status: reviewed
+spec_version: v1
+read_first:
+  - fine-tuning/program-coordination/PROGRAM.md
+  - the frozen serving contract
+  - the lane deployment and rollback manifests
+mandate:
+  - task: Define exact/degraded and tool/no-tool arms, valid-night rules, teardown checks, standing predicates, and rollback scope.
+    stop_or_ask: Stop on mutable envelopes, missing hashes, unfrozen exposure windows, or spend need.
+  - task: Separate replay evidence from live shadow evidence and report categorized cost requirements.
+    stop_or_ask: Never count successful replay as shadow or authorize deployment.
+laws:
+  - Read only; never spawn another agent or authorize spend.
+  - Preserve operational failures, teardown failures, adverse nights, and intent-to-observe denominators.
+  - Rollback proof covers the full serving configuration, not only weights.
+  - Store only identifiers, hashes, aggregate counts, and artifact pointers; never raw customer text.
+single_writer:
+  owns: [the serve architect's immutable lane report path]
+  do_not_touch: [live deployment, shared artifacts, the other lane, customer payloads]
+workspace:
+  worktree: report-only execution in the assigned lane workspace
+  branch_pattern: report-only/<run-slug>/serve-architect
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields: [last_completed_step, current_artifact, input_hashes]
+  paid: false
+outputs: [serving envelope and rollback architecture report]
+done_when: Every arm, window rule, stop predicate, teardown check, cost category, and rollback step is explicit and falsifiable.
+final_response_shape: 'Strict JSON only (no prose): {"verdict":"PASS|BLOCKED","lesson_dispositions":[{"lesson_id":"...","disposition":"APPLIED|NOT_APPLICABLE|CONTRADICTED|UNRESOLVED","evidence_chain":["..."],"mechanical_check_result":"PASS|FAIL|NOT_RUN","effect_on_plan":"..."}],"claims":[],"blockers":[],"next_reversible_action":"..."}.'
+typical_count: 1 per lane
+evidence_pointer: fine-tuning/program-coordination/PROMPTS.md SERVE-ARCH mandate
+runtime:
+  model: sonnet
+  max_turns: 16
+  budget_usd: 1.0
+  allowed_tools: [Read, Grep, Glob]

@@ -1,0 +1,42 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "census",
+  "stage_index": 1,
+  "generated_at": "2026-07-28T16:59:31+00:00",
+  "status": "attention",
+  "dry_run": true,
+  "inputs": {
+    "config_book": {
+      "accounts": 100,
+      "fact_bearing_accounts": 40,
+      "zero_order_accounts": 60,
+      "book_revenue_usd": 50000,
+      "transcripts": 100,
+      "reviews": 500,
+      "runs_total": 500,
+      "usable_runs": 480,
+      "actionable_runs": 150,
+      "reviews_with_trajectory_id": 100
+    },
+    "cross_check": {
+      "census_doc": "company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md",
+      "org_found": false
+    }
+  },
+  "findings": {
+    "tier_computed": "A",
+    "tier_in_config": "A",
+    "tier_match": true,
+    "fact_bearing_share": 0.4,
+    "qa_dose_estimate_pairs": 2200,
+    "usable_real_trajectories": 480,
+    "trajectory_selection_estimate": [
+      50,
+      100
+    ],
+    "axis_verdict": "full"
+  },
+  "recommendation": "FULL \u2014 factual + behavioral + real-trajectory corpus",
+  "next": "governance (HUMAN GATE \u2014 data-use clearance)",
+  "todo_v1": "re-run live read-only PostgREST census instead of trusting the snapshot; commit the census script"
+}

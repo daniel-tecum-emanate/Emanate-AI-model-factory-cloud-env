@@ -1,0 +1,36 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "governance",
+  "stage_index": 2,
+  "generated_at": "2026-07-28T06:22:05+00:00",
+  "status": "approved",
+  "dry_run": true,
+  "checklist": {
+    "customer_status_confirmed": true,
+    "data_use_clearance": true,
+    "dpa_signed": true,
+    "training_rights_clause": true,
+    "pii_egress_cleared": true,
+    "permitted_uses_include_sft": true
+  },
+  "decision_request": {
+    "decision": "clear QA Dryrun Synth Org (qa-dryrun-synth) for data-use / SFT training",
+    "recommendation": "approve",
+    "checklist": {
+      "customer_status_confirmed": true,
+      "data_use_clearance": true,
+      "dpa_signed": true,
+      "training_rights_clause": true,
+      "pii_egress_cleared": true,
+      "permitted_uses_include_sft": true
+    }
+  },
+  "standard_pattern": {
+    "contract": "standard training-rights clause in MSA/DPA (pending Kiara \u2014 census open item)",
+    "permitted_uses": "explicit per-org list: retrieval/eval/sft/preference/research",
+    "pii": "tool_result blocks carry customer PII \u2014 egress clearance is per-org, recorded verbatim on the board",
+    "deletion_story": "throw away the adapter (per-org LoRA); dossiers/corpora live gitignored on one machine, deletable",
+    "capture": "R8 governance layer (owner, consent, permitted uses, PII class, retention, deletion key) recorded at capture"
+  },
+  "next": "export"
+}

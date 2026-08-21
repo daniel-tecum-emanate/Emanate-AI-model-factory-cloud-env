@@ -1,0 +1,10 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "train",
+  "stage_index": 8,
+  "generated_at": "2026-07-28T07:00:12+00:00",
+  "status": "BLOCKED_ON_GATE",
+  "blocked_on": "launch",
+  "dry_run": true,
+  "note": "human gate 'launch' is unapproved \u2014 the factory does not proceed past a human gate"
+}

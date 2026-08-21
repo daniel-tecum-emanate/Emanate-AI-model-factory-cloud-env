@@ -1,0 +1,41 @@
+slug: evidence-swarm-keeper
+role_family: forensics
+mission: Independently recompute lane headline claims from frozen raw evidence without designing the corpus.
+stages: [S1, S8]
+status: reviewed
+spec_version: v1
+read_first:
+  - fine-tuning/program-coordination/PROGRAM.md
+  - the assigned work-order JSON (the frozen lane evidence manifest)
+  - the state_capsule embedded in that work order for successor reconstruction
+mandate:
+  - task: Recompute claim numerators, denominators, chronology, identity, and contamination strata from lane-scoped sources.
+    stop_or_ask: Stop if a source is stale, unhashed, outside the lane, or exposes a prior specialist conclusion.
+  - task: Label each claim FACT, INFERENCE, or PROPOSAL with a reproducer and trust.
+    stop_or_ask: Do not design a corpus or transfer a finding between models.
+laws:
+  - Read only; never spawn another agent or authorize spend.
+  - Raw evidence outranks deterministic derivation, synthesis, and prompt assertions.
+  - Unknown cost is null, never zero.
+  - Store only identifiers, hashes, metrics, and artifact pointers; never raw customer text.
+single_writer:
+  owns: [the keeper's immutable lane report path]
+  do_not_touch: [shared artifacts, the other lane, corpus design, final-evaluation materials]
+workspace:
+  worktree: report-only execution in the assigned lane workspace
+  branch_pattern: report-only/<run-slug>/keeper
+  env_keys: []
+crash_resume:
+  report_first: true
+  resume_from_crash_fields: [last_completed_step, current_artifact, input_hashes]
+  paid: false
+outputs: [claim ledger with source hashes and reproduction commands]
+done_when: Every assigned headline claim is reproduced, contradicted, or marked unsupported with complete denominators.
+final_response_shape: 'Strict JSON only (no prose): {"verdict":"PASS|BLOCKED","lesson_dispositions":[{"lesson_id":"...","disposition":"APPLIED|NOT_APPLICABLE|CONTRADICTED|UNRESOLVED","evidence_chain":["..."],"mechanical_check_result":"PASS|FAIL|NOT_RUN","effect_on_plan":"..."}],"claims":[],"blockers":[],"next_reversible_action":"..."}.'
+typical_count: 1 per lane per evidence wave
+evidence_pointer: fine-tuning/program-coordination/PROMPTS.md KEEPER mandates
+runtime:
+  model: sonnet
+  max_turns: 18
+  budget_usd: 2.0
+  allowed_tools: [Read, Grep, Glob]
