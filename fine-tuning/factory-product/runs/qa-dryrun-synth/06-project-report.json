@@ -1,0 +1,37 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "project",
+  "stage_index": 6,
+  "generated_at": "2026-08-21T21:04:43+00:00",
+  "status": "ok",
+  "dry_run": true,
+  "decision_request": {
+    "decision": "approve training spend for QA Dryrun Synth Org (qa-dryrun-synth) v1",
+    "options": [
+      "approve at projection",
+      "reject",
+      "re-scope corpus and re-project"
+    ],
+    "recommendation": "approve",
+    "assumptions": [
+      "token volume = 5% of PTC reference (3,998,200 tok/epoch)",
+      "epochs = 1 (frozen recipe)",
+      "unroll x1.386 (L22), dual-bucket x2.0 (L34), calibration x1.3 (runbook #6)",
+      "validate against the LAST completed job's actual estimatedCost before launch (drift-stop pattern)",
+      "trust platform estimatedTokenCount over tiktoken (L6/L22)"
+    ],
+    "evidence": [
+      "company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md",
+      "company-brain/3-execution/COSTS.md"
+    ],
+    "cost": {
+      "sft_estimate_usd": 0.83,
+      "train_all_in_usd": 2.16,
+      "eval_window_cap_usd": 15,
+      "total_projection_usd": 17.16
+    },
+    "reversibility": "high pre-launch ($0 spent); capacity-FAILED jobs bill $0; PAUSED jobs resume (L34a); champion untouched"
+  },
+  "todo_v1": "submit via scripts/lib/validate_core.py add so the launch gate lands in validation/QUEUE.md + dashboard",
+  "next": "launch (HUMAN GATE \u2014 Daniel approves the calibrated projection; no auto-launch, ever)"
+}

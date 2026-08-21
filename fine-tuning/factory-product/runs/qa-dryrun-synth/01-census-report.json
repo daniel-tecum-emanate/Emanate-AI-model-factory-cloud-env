@@ -2,7 +2,7 @@
   "org": "qa-dryrun-synth",
   "stage": "census",
   "stage_index": 1,
-  "generated_at": "2026-07-28T16:59:31+00:00",
+  "generated_at": "2026-08-21T21:04:42+00:00",
   "status": "attention",
   "dry_run": true,
   "inputs": {
@@ -20,7 +20,8 @@
     },
     "cross_check": {
       "census_doc": "company-brain/3-execution/ORG-READINESS-CENSUS-2026-07-14.md",
-      "org_found": false
+      "org_found": false,
+      "note": "census doc missing on disk"
     }
   },
   "findings": {

@@ -1,0 +1,16 @@
+{
+  "org": "qa-dryrun-synth",
+  "stage": "launch",
+  "stage_index": 7,
+  "generated_at": "2026-08-21T21:05:01+00:00",
+  "status": "gate_pending",
+  "dry_run": false,
+  "projection": {
+    "sft_estimate_usd": 0.83,
+    "train_all_in_usd": 2.16,
+    "eval_window_cap_usd": 15,
+    "total_projection_usd": 17.16
+  },
+  "approved_by": null,
+  "next": "blocked"
+}

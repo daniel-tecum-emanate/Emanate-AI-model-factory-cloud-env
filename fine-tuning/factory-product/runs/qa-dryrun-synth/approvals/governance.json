@@ -1,6 +1,6 @@
 {
   "gate": "governance",
-  "approved_at": "2026-07-28T06:22:05+00:00",
-  "note": "config governance block fully clear + Daniel approved",
-  "approved_via": "factory --approved flag (v0.5: flag = Daniel typed it himself)"
+  "approved_at": "2026-08-21T21:04:42+00:00",
+  "note": "config governance block fully clear \u2014 AUTO-APPROVED (checklist-based policy, no human in the loop for this gate)",
+  "approved_via": "governance checklist clear policy (no human in the loop for this gate)"
 }

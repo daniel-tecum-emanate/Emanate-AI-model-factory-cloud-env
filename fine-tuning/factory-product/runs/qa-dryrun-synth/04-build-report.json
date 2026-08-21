@@ -2,7 +2,7 @@
   "org": "qa-dryrun-synth",
   "stage": "build",
   "stage_index": 4,
-  "generated_at": "2026-07-28T22:56:00+00:00",
+  "generated_at": "2026-08-21T21:04:42+00:00",
   "status": "todo",
   "dry_run": true,
   "heldout_anchor": {
@@ -48,7 +48,8 @@
       "runtime": {
         "model": "sonnet",
         "max_turns": 30,
-        "budget_usd": 2.0
+        "budget_usd": 2.0,
+        "executor": "self_dispatch"
       },
       "allowed_tools": [
         "Read",
@@ -71,7 +72,8 @@
       "runtime": {
         "model": "sonnet",
         "max_turns": 30,
-        "budget_usd": 2.0
+        "budget_usd": 2.0,
+        "executor": "self_dispatch"
       },
       "allowed_tools": [
         "Read",
@@ -94,7 +96,10 @@
       "runtime": {
         "model": "haiku",
         "max_turns": 15,
-        "budget_usd": 0.5
+        "budget_usd": 0.5,
+        "executor": "cursor_sdk",
+        "cursor_runtime": "local",
+        "cursor_model": "composer-2.5"
       },
       "allowed_tools": [
         "Read",
@@ -117,7 +122,8 @@
       "runtime": {
         "model": "sonnet",
         "max_turns": 20,
-        "budget_usd": 1.0
+        "budget_usd": 2.0,
+        "executor": "self_dispatch"
       },
       "allowed_tools": [
         "Read",

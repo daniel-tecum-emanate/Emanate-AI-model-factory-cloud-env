@@ -2,7 +2,7 @@
   "org": "qa-dryrun-synth",
   "stage": "governance",
   "stage_index": 2,
-  "generated_at": "2026-07-28T06:22:05+00:00",
+  "generated_at": "2026-08-21T21:04:42+00:00",
   "status": "approved",
   "dry_run": true,
   "checklist": {
@@ -14,9 +14,9 @@
     "permitted_uses_include_sft": true
   },
   "decision_request": {
-    "decision": "clear QA Dryrun Synth Org (qa-dryrun-synth) for data-use / SFT training",
+    "decision": "clear QA Dryrun Synth Org (qa-dryrun-synth) per-account stream for SFT",
     "recommendation": "approve",
-    "checklist": {
+    "shared_org_governance_reattestation": {
       "customer_status_confirmed": true,
       "data_use_clearance": true,
       "dpa_signed": true,
@@ -25,6 +25,7 @@
       "permitted_uses_include_sft": true
     }
   },
+  "approved_by": "policy",
   "standard_pattern": {
     "contract": "standard training-rights clause in MSA/DPA (pending Kiara \u2014 census open item)",
     "permitted_uses": "explicit per-org list: retrieval/eval/sft/preference/research",

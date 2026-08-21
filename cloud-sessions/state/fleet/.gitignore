@@ -1,0 +1,6 @@
+# Beat files are staged here and pushed to refs/heads/cloud-fleet/<session-id> by
+# ../../bin/cloud-heartbeat.sh, and fetched back here as a read cache. They are
+# deliberately NOT tracked on a work branch: telemetry must not enter a PR diff.
+*.json
+*.json.corrupt-*
+.locks/

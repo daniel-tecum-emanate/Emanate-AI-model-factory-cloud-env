@@ -1,0 +1,6 @@
+# Claim files are staged here and pushed to
+# refs/heads/cloud-claims/<org>/<stream> by ../../bin/cloud-claim.sh, and fetched back
+# here as a read cache. They are deliberately NOT tracked on a work branch: a claim
+# snapshot must not enter a PR diff any more than a heartbeat beat does.
+*.json
+*.json.corrupt-*
