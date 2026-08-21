@@ -2,7 +2,7 @@
   "org": "qa-dryrun-synth",
   "stage": "launch",
   "stage_index": 7,
-  "generated_at": "2026-08-21T21:21:44+00:00",
+  "generated_at": "2026-08-21T21:26:59+00:00",
   "status": "gate_pending",
   "dry_run": false,
   "projection": {
