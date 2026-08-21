@@ -1,6 +1,12 @@
 {
-  "beats": 4,
-  "blocker": null,
+  "beats": 5,
+  "blocker": {
+    "detail": "S6g launch gate pending for qa-dryrun-synth: projected all-in cost $17.16 (sft $0.83 + train $2.16 + eval-window cap $15) vs cap $50, stop-gate $100 (see 07-launch-report.json)",
+    "kind": "needs-decision",
+    "needs": "Daniel's approval on the launch gate - via the Model Factory tab, or factory.py qa-dryrun-synth --stage launch --approved, run by a human",
+    "restated_at": "2026-08-21T21:05:12Z",
+    "since": "2026-08-21T21:05:12Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -33,6 +39,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-21T21:04:52Z",
       "verb": "beat"
+    },
+    {
+      "detail": "S6g launch gate pending for qa-dryrun-synth: projected all-in cost $17.16 (sft $0.83 + train $2.16 + eval-window cap $15) vs cap $50, stop-gate $100 (see 07-launch-report.json)",
+      "kind": "needs-decision",
+      "phase": "project complete for qa-dryrun-synth, ready to check the launch gate",
+      "status": "BLOCKED",
+      "ts": "2026-08-21T21:05:12Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -42,7 +56,7 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-qa-dryrun-synth",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "orchestrating qa-dryrun-synth fine-tune pipeline",
   "phase": "project complete for qa-dryrun-synth, ready to check the launch gate",
   "progress": {
@@ -52,6 +66,6 @@
   "schema": 1,
   "session_id": "6649e08c-7c64-53b0-af7a-e548113a5b86",
   "started_at": "2026-08-21T21:04:22Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-21T21:04:52Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-21T21:05:12Z"
 }
