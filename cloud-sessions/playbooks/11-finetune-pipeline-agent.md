@@ -1,14 +1,45 @@
 # 11 — The fine-tuning pipeline orchestrator agent
 
-**Status: DOCS — design-only, drafted 2026-08-19 for
-[`PRs/model-factory-finetune-launcher-v1/PRContext-phase2.md`](../../PRs/model-factory-finetune-launcher-v1/PRContext-phase2.md)
-task T2-4.** Per ground rule 1 ([`../AGENT.md`](../AGENT.md)): this playbook has **not**
+**STATUS UPDATE (2026-08-21) — this whole document describes an early design that is NOT how
+the system ended up dispatching. Read this note before anything below it.** This file's §1-8
+were drafted 2026-08-19 around `cs new --cloud --plan` (a real terminal dispatching a cloud
+session with this file as its plan) and around cloning **`emanate-tecum-workflow`** on branch
+**`cloud-dispatch/finetune-rehearsal-v1`**. What actually got built and proven working
+(2026-08-21) is different in two ways: (1) dispatch is a **routine**
+(`model-factory-finetune-orchestrator-v1`, fired via the product's "Start a run" button or the
+`RemoteTrigger`/`claude_code/routines` REST API — not `cs new --cloud`), and (2) the routine
+clones a **different, dedicated repo** — `daniel-tecum-emanate/Emanate-AI-model-factory-cloud-env`
+— because the Claude GitHub App was never granted access to `emanate-tecum-workflow` (a
+personal-account repo) and no fix for that within `emanate-tecum-workflow` itself was possible.
+The new repo's `main` branch carries a clean copy of `fine-tuning/factory-product/` +
+`cloud-sessions/` at its root — no branch-switching step is needed there at all.
+
+**For the actual current dispatch prompt, read the live routine, not §8 below** — it has
+diverged. **For the real root-cause story and what's proven working end-to-end (S1-S6, correct
+S6g gate deference, live on a real cloud VM), read
+[`PRs/model-factory-cloud-dispatch-v1/RUN-LOG.md`](../../PRs/model-factory-cloud-dispatch-v1/RUN-LOG.md)
+and
+[`handoffs/model-factory-cloud-dispatch-v1/current.md`](../../handoffs/model-factory-cloud-dispatch-v1/current.md)
+("V-316 CLOSED" section) — those are the source of truth, not this file.**
+
+§§1-7 below are otherwise still substantively accurate (the heartbeat/claim/gate mechanics,
+the relay-claim exchange, the launch relay) — only the repo/branch identity and the dispatch
+trigger mechanism in §8's literal templates are wrong. Left as historical design record rather
+than deleted; do not follow §8's `cs new --cloud --plan` instructions or its `emanate-tecum-workflow`
+/ `cloud-dispatch/finetune-rehearsal-v1` references literally.
+
+<details>
+<summary>Original 2026-08-19 status note (superseded, kept for history)</summary>
+
+Per ground rule 1 ([`../AGENT.md`](../AGENT.md)): this playbook has **not**
 been exercised end-to-end. Dispatching a real cloud session needs a real interactive
 terminal (`claude --cloud` refuses without a TTY — [`02-dispatch.md`](02-dispatch.md)), which
 no non-interactive session, including the one that wrote this file, has. Everything below is
 grounded in real, read code (`factory.py`, `factory_stages.py`, `run_pipeline.py`,
 `cloud-heartbeat.sh`) and this folder's own verified mechanisms (`02`, `06`, `10`) — but the
 playbook *as a whole run* is `UNVERIFIED`. Do not read "concrete" below as "tried."
+
+</details>
 
 Read [`02-dispatch.md`](02-dispatch.md) and [`10-fleet.md`](10-fleet.md) in full first — this
 file assumes both. It is the third leg of

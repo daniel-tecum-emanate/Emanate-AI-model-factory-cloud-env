@@ -1,0 +1,29 @@
+# This repo is the cloud fine-tuning environment. It exists BECAUSE the repo it
+# was carved out of accumulated 100MB+ corpus blobs and became unpushable
+# (V-309). Everything here is aimed at not repeating that.
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Machine-local state a cloud session generates at runtime. `ledger/` in
+# particular appeared untracked at the repo root during a dry run.
+ledger/
+cloud-sessions/state/
+*.log
+
+# Run artifacts. This is the large-blob rule: a run directory may hold a
+# multi-hundred-MB corpus, which is exactly what made the parent repo
+# unpushable. Only the small synthetic QA fixture is tracked, deliberately.
+fine-tuning/factory-product/runs/*
+!fine-tuning/factory-product/runs/qa-dryrun-synth/
+
+# Secrets — never, under any circumstances.
+.env
+.env.*
+!.env.example
