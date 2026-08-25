@@ -1,6 +1,12 @@
 {
-  "beats": 4,
-  "blocker": null,
+  "beats": 5,
+  "blocker": {
+    "detail": "S6g launch gate pending for grand-steel: projected all-in cost $48.18 vs cap $50 (stop-gate $100) - see 07-launch-report.json for full decision_request",
+    "kind": "needs-decision",
+    "needs": "Daniel's approval on the launch gate - via the Model Factory tab, or factory.py grand-steel --stage launch --approved, run by a human",
+    "restated_at": "2026-08-25T05:59:39Z",
+    "since": "2026-08-25T05:59:39Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -33,6 +39,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:29Z",
       "verb": "beat"
+    },
+    {
+      "detail": "S6g launch gate pending for grand-steel: projected all-in cost $48.18 vs cap $50 (stop-gate $100) - see 07-launch-report.json for full decision_request",
+      "kind": "needs-decision",
+      "phase": "project complete for grand-steel, ready to check the launch gate",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T05:59:39Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -42,7 +56,7 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "orchestrating grand-steel fine-tune pipeline",
   "phase": "project complete for grand-steel, ready to check the launch gate",
   "progress": {
@@ -52,6 +66,6 @@
   "schema": 1,
   "session_id": "a4e6b09e-c066-50d3-9740-1aff9f2ed8bd",
   "started_at": "2026-08-25T05:59:11Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:29Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T05:59:39Z"
 }
