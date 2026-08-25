@@ -1,6 +1,12 @@
 {
-  "beats": 3,
-  "blocker": null,
+  "beats": 4,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and live, held_by=a4e6b09e-c066-50d3-9740-1aff9f2ed8bd since 2026-08-25T05:59:20Z, heartbeat ACTIVE as of 2026-08-25T05:59:29Z",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run",
+    "restated_at": "2026-08-25T05:59:36Z",
+    "since": "2026-08-25T05:59:36Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -27,6 +33,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:26Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and live, held_by=a4e6b09e-c066-50d3-9740-1aff9f2ed8bd since 2026-08-25T05:59:20Z, heartbeat ACTIVE as of 2026-08-25T05:59:29Z",
+      "kind": "needs-human-action",
+      "phase": "running without DB sync - relay_claim_code present but app_base_url absent from fire payload, cannot construct exchange URL",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T05:59:36Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -36,13 +50,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "orchestrating grand-steel fine-tune pipeline",
   "phase": "running without DB sync - relay_claim_code present but app_base_url absent from fire payload, cannot construct exchange URL",
   "progress": null,
   "schema": 1,
   "session_id": "677bff88-9f27-57fb-ba94-5db31e8ef6ad",
   "started_at": "2026-08-25T05:59:21Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:26Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T05:59:36Z"
 }
