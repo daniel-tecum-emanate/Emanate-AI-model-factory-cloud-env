@@ -1,6 +1,12 @@
 {
-  "beats": 2,
-  "blocker": null,
+  "beats": 3,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and live, held_by=a4e6b09e-c066-50d3-9740-1aff9f2ed8bd, stage=project, updated_at=2026-08-25T05:59:30Z",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run",
+    "restated_at": "2026-08-25T05:59:44Z",
+    "since": "2026-08-25T05:59:44Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -22,6 +28,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:36Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and live, held_by=a4e6b09e-c066-50d3-9740-1aff9f2ed8bd, stage=project, updated_at=2026-08-25T05:59:30Z",
+      "kind": "needs-human-action",
+      "phase": "running without DB sync - fire payload has relay_claim_code but no app_base_url, cannot perform exchange",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T05:59:44Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -31,13 +45,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "orchestrating grand-steel fine-tune pipeline; verified fine-tuning/factory-product/factory.py exists at repo root (pwd=/home/user/Emanate-AI-model-factory-cloud-env)",
   "phase": "running without DB sync - fire payload has relay_claim_code but no app_base_url, cannot perform exchange",
   "progress": null,
   "schema": 1,
   "session_id": "d1f053ba-3c6b-50f6-84a5-de088edaea9e",
   "started_at": "2026-08-25T05:59:21Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:36Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T05:59:44Z"
 }
