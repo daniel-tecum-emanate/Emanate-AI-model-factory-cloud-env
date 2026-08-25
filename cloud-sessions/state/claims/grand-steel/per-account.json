@@ -1,6 +1,6 @@
 {
   "claimed_at": "2026-08-25T05:59:20Z",
-  "current_stage": "S1",
+  "current_stage": "project",
   "emitter": {
     "name": "cloud-claim.sh",
     "version": 1
@@ -13,6 +13,12 @@
       "event": "claimed",
       "stage": "S1",
       "ts": "2026-08-25T05:59:20Z"
+    },
+    {
+      "by": "a4e6b09e-c066-50d3-9740-1aff9f2ed8bd",
+      "event": "renewed",
+      "stage": "project",
+      "ts": "2026-08-25T05:59:30Z"
     }
   ],
   "kind": "cloud-claim",
@@ -24,5 +30,5 @@
   "released_at": null,
   "run_id": null,
   "schema": 1,
-  "updated_at": "2026-08-25T05:59:20Z"
+  "updated_at": "2026-08-25T05:59:30Z"
 }
