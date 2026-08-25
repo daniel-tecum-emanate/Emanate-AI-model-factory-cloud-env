@@ -1,19 +1,15 @@
 # reference/ — what is true about a thing
 
-> **Provenance note, 2026-08-18:** this folder used to also hold seven dated cloud-VM
-> probe reports, an evidence record (`verified-facts.md`), a gap register
-> (`OPEN-GAPS.md`), `billing.md`, `this-repo-in-the-cloud.md`, `linux-verification-2026-08-15.md`,
-> `subagents-in-cloud-2026-08-16.md`, `gap-closure-2026-08-16.md`, `porting-audit-2026-08-17.md`,
-> `reachability-2026-08-17.md`, `safety-audit-2026-08-15.md`, `workflow-bootstrap-2026-08-17.md`
-> and `founder-decisions-2026-08-18.md`. All of it was written and verified against a
-> **different repository**, `daniel0tgc/internal-company-tool`, bulk-committed into this
-> repo (`daniel-tecum-emanate/emanate-tecum-workflow`) by mistake in commit `7a5690b`. It
-> has been moved whole, unedited, to
-> [`../archive/foreign-repo-provenance-2026-08-18/`](../archive/foreign-repo-provenance-2026-08-18/README.md) —
-> read that folder's README before citing anything in it. Nothing below this note has been
-> verified against *this* repo specifically; the five files that remain describe the
-> `cs`/`cloud-sessions` mechanism itself (account-level, not repo-specific), corrected for
-> this repo's real identity where they named the other one.
+> **Provenance note, 2026-08-18:** this folder used to also hold seven dated cloud-VM probe
+> reports, an evidence record (`verified-facts.md`), a gap register (`OPEN-GAPS.md`),
+> `billing.md`, and a set of dated audits. All of it was written and verified against a
+> **different repository**, `daniel0tgc/internal-company-tool`, and was bulk-committed here
+> by mistake. It was archived out of this folder and has since been removed from this repo
+> entirely, as part of trimming this repo down to the fine-tuning harness. It stays
+> recoverable from git history. Nothing below this note has been verified against *this*
+> repo specifically; the five files that remain describe the `cs`/`cloud-sessions`
+> mechanism itself (account-level, not repo-specific), corrected for this repo's real
+> identity where they named the other one.
 
 Claims, limits, matrices, error tables, and competitor architecture. How to *do* a thing
 goes in [`../playbooks/`](../playbooks/README.md) instead. Dated probe reports and the
@@ -56,8 +52,9 @@ should show exactly these five files plus this index.
 ## When you add something
 
 - **New claim, verified against this repo** → a new `verified-facts.md` here, with the
-  status tag and the actual command output — do not resurrect the archived one, start
-  fresh and cite it as this repo's own evidence.
+  status tag and the actual command output. Start fresh and cite it as this repo's own
+  evidence; do not go digging the old one out of git history — it was about a different
+  repository, and reviving it would reintroduce exactly the confusion it caused.
 - **New failure mode** → [`troubleshooting.md`](troubleshooting.md), as *error text → what
   it actually means → fix*.
 - **New capability** → also a row in [`surfaces.md`](surfaces.md), and a numbered playbook

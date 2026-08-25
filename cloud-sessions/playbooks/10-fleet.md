@@ -4,7 +4,7 @@
 > (`daniel0tgc/internal-company-tool`) — mechanism-level content stands (the fleet
 > mechanism itself is genuinely usable here). Its `atlas-os/heartbeat/STATE.md`
 > reference does not exist in this repo (`emanate-tecum-workflow`); this repo's own
-> heartbeat board is [`../../coordination/heartbeat/STATE.md`](../../coordination/heartbeat/STATE.md),
+> heartbeat board is `coordination/heartbeat/STATE.md` (in `emanate-tecum-workflow`, not this repo),
 > a different, unconnected system — the fleet mechanism (`cloud-fleet/*` refs, `cs fleet`)
 > does not depend on either board.
 
@@ -38,8 +38,8 @@ Three moving parts, and they meet in git — never on a laptop that may be close
 
 **Why git and nothing else.** A cloud session's own hook telemetry is written to the VM's
 disk, is gitignored, and dies when the VM is reclaimed — deliberately, and do not "fix" it
-([`../AGENT.md`](../AGENT.md), and the reverted fix in
-[`../reference/verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md)). The heartbeat board at
+([`../AGENT.md`](../AGENT.md); someone tried committing that trace once and the change was
+reverted). The heartbeat board at
 `atlas-os/heartbeat/STATE.md` does not travel to a VM in any useful way either (`V-021`).
 Anything that must outlive the VM has to be **pushed**. That is the whole design.
 
@@ -87,8 +87,8 @@ Four rules that have each cost something here:
 
 An agent on a cloud VM can fan out. The `Agent` tool is present there, several subagents
 run genuinely concurrently, they inherit the VM's git credentials, and their tool calls are
-logged under distinct child session ids — `VERIFIED 2026-08-16`
-([`../reference/subagents-in-cloud-2026-08-16.md`](../archive/foreign-repo-provenance-2026-08-18/subagents-in-cloud-2026-08-16.md)),
+logged under distinct child session ids — `VERIFIED 2026-08-16` by a probe that fanned out
+on a real VM and checked all three properties,
 and again end-to-end on 2026-08-17 when one cloud session ran an entire workflow,
 coordinator included, and opened one PR. So the unit of dispatch is not one agent — it is
 one *coordinator* that spawns its own.
@@ -305,8 +305,9 @@ after any lane touches `bin/cs`, `bin/cloud-heartbeat.sh` or `bin/fleet_ui.py`.
   disabled individually; `/cloud all` dispatches an exodus manifest, which is the
   *departure*, not the fleet.
 - **Rate limits are shared.** Twenty agents draw on one subscription. Nothing here charges
-  per VM, and nothing here should ever provision paid infrastructure —
-  [`../reference/billing.md`](../archive/foreign-repo-provenance-2026-08-18/billing.md).
+  per VM, and nothing here should ever provision paid infrastructure — recurring spend is
+  Daniel's decision, per [`../AGENT.md`](../AGENT.md)'s "never provision paid
+  infrastructure" constraint.
 - **Exit 0 is not "all clear".** It means nothing *reported* blocked.
 
 ---
@@ -324,4 +325,3 @@ after any lane touches `bin/cs`, `bin/cloud-heartbeat.sh` or `bin/fleet_ui.py`.
   check — read this playbook first, then `12`
 - [`../bin/README.md`](../bin/README.md) — every executable, its cost, its side effects
 - [`../state/README.md`](../state/README.md) — the ledger, the manifest, the fleet directory
-- [`../reference/verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md) — the evidence record

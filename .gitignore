@@ -13,9 +13,22 @@ venv/
 
 # Machine-local state a cloud session generates at runtime. `ledger/` in
 # particular appeared untracked at the repo root during a dry run.
+#
+# `cloud-sessions/state/` covers the runtime churn: `fleet/` heartbeat files and
+# `exodus-manifest.json`. It does NOT un-track the two files already committed
+# there (`README.md` and the empty `sessions.jsonl` dispatch ledger) — gitignore
+# only ever applies to untracked paths, so AGENT.md's "tracked on purpose since
+# 2026-08-14" and this rule are both true at once. Noted 2026-08-24 because the
+# two statements read as a contradiction otherwise.
 ledger/
 cloud-sessions/state/
 *.log
+
+# `run.sh` rewrites this on every run. It is a per-run log, not a record: the
+# archived copy was removed in the 2026-08-24 trim precisely because its numbers
+# were measured against a different repo and invited miscitation. Generate it
+# locally; never commit one repo's run log into another's history.
+cloud-sessions/tests/RESULTS.md
 
 # Run artifacts. This is the large-blob rule: a run directory may hold a
 # multi-hundred-MB corpus, which is exactly what made the parent repo

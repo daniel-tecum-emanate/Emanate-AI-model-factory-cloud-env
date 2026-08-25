@@ -135,7 +135,7 @@ def test_manifest_uses_program_id_and_role_slugs(tmp_path):
     for role in manifest.workspace.roles:
         slug = cloud_bootstrap.ROLE_SLUGS[role.role_name]
         assert list(role.owned_output_paths) == [
-            f"factory-automation/factory/runs/ptc-steel/swarm/cloud/roles/{slug}"
+            f"fine-tuning/factory-product/runs/ptc-steel/swarm/cloud/roles/{slug}"
         ]
         assert role.logical_role_id == (
             f"{cloud_bootstrap.PROGRAM_ID}/ptc/{role.role_name}"

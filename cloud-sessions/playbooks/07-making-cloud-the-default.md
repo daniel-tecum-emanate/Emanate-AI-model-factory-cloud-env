@@ -44,8 +44,8 @@ Three probes against the 2.1.231 binary on this machine, all negative:
   this space (`CLAUDE_CODE_REMOTE_*`, `CLAUDE_CODE_BRIDGE_SESSION_ID`) are set *by* a cloud
   or bridge session to describe itself, not read to route one.
 
-`VERIFIED 2026-08-14` — commands and output are in this lane's return; they belong in
-[`verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md) and are not there yet.
+`VERIFIED 2026-08-14` — measured directly, by reading what each variable is actually used
+for rather than inferring from its name.
 
 `--cloud` is a per-invocation flag with no persistent equivalent. That is the whole finding.
 
@@ -85,8 +85,7 @@ cs new --cloud "Finish the auth refactor and get the tests green"
 cs handoff "Finish the auth refactor and get the tests green"
 ```
 
-`VERIFIED` — the dispatch chain is proven end to end; see
-[verified-facts](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#the-chain-that-matters). Mechanics are in
+`VERIFIED` — the dispatch chain is proven end to end. Mechanics are in
 [02 — Dispatch](02-dispatch.md); this section is only about using it as a default.
 
 **It needs a TTY, and that is a hard floor.** The CLI's own validation refuses `--cloud`
@@ -139,8 +138,7 @@ Two verified facts keep the distinction sharp:
 - Server mode prints a spawn URL from which you can start *new* sessions from your phone.
   Those sessions run **on the Mac**. "Started it from my phone" is not "it is in the cloud".
 
-Both in
-[verified-facts](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#remote-control-server-mode-registers-a-bridge-environment--verified).
+Both measured directly.
 The phone half of Remote Control is still untested here; see [04](04-remote-control.md).
 
 ## Route 5 — a shell wrapper, and why to think twice
@@ -216,9 +214,11 @@ None of this is fixable with configuration. It is what a different machine means
 | **Your working tree** | The VM clones the **GitHub remote**. Uncommitted and unpushed work does not exist to it. `cs start` gates on this rather than letting you find out from a confusing startup error |
 | **`HEAD` on a branch** | Cloud checkouts start **detached**. Anything assuming `git rev-parse --abbrev-ref HEAD` returns a branch name gets `HEAD` |
 
-Full accounting of what this repo specifically can and cannot do there:
-[`this-repo-in-the-cloud.md`](../archive/foreign-repo-provenance-2026-08-18/this-repo-in-the-cloud.md). VM measurements:
-[verified-facts](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#confirmed-and-worth-knowing).
+The VM measurements behind the two rows above were taken 2026-08-14 from inside real cloud
+VMs. The full per-repo accounting that used to sit alongside them was written against a
+different repository and is no longer carried here — for what *this* repo can and cannot do
+in the cloud, [`06-environments.md`](06-environments.md) and
+[`11-finetune-pipeline-agent.md`](11-finetune-pipeline-agent.md) are the current statements.
 
 ## Settings keys that sound like the switch and are not
 
@@ -233,9 +233,9 @@ Full accounting of what this repo specifically can and cannot do there:
 
 | Route | Status here |
 |---|---|
-| `claude --cloud "<task>"` / `cs handoff` / `cs new --cloud` | **`VERIFIED`** — [the chain](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#the-chain-that-matters) |
-| Routines (`/schedule`) | **`VERIFIED`** — [4b](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#4b-routines-fire-and-clone--verified) |
-| `cs new` chooser and its refusal paths | **`VERIFIED`** — exercised by `tests/run.sh`, re-confirmed on Linux in [probe 6](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#cloud-sessions-are-logged--but-the-record-dies-with-the-vm--verified-2026-08-14). Not run while writing this file |
+| `claude --cloud "<task>"` / `cs handoff` / `cs new --cloud` | **`VERIFIED`** — the chain |
+| Routines (`/schedule`) | **`VERIFIED`** — 4b |
+| `cs new` chooser and its refusal paths | **`VERIFIED`** — exercised by `tests/run.sh`, re-confirmed on Linux in probe 6. Not run while writing this file |
 | Remote Control registers a **bridge** environment that routes work back to the Mac | **`VERIFIED`** |
 | Starting a session in the browser at claude.ai/code | **`DOCS`** — documented, never exercised from this account |
 | Starting a session from the Claude mobile app's Code tab | **`DOCS`** — same |

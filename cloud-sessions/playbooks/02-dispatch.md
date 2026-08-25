@@ -101,8 +101,8 @@ So end cloud prompts with the handoff you want:
 > "…when the tests pass, commit to a `claude/` branch and open a PR describing what
 > changed and what you could not verify."
 
-Pushing is verified working
-([4c](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#4c-a-cloud-session-can-push-a-branch--verified)).
+Pushing is verified working — a cloud session was observed pushing a branch to GitHub
+successfully (verified 2026-08-12).
 Claude pushes to `claude/`-prefixed branches, which are always accepted; pushes to other
 branches are rejected if the branch is protected, carries someone else's commits, or has
 someone else's open PR. Note the commit author is recorded as

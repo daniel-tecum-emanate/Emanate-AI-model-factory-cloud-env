@@ -8,7 +8,7 @@ Design: `../../factory-automation/FACTORY-PLAN.md` (stages, gates, config schema
 when this product moved to `fine-tuning/factory-product/` on 2026-08-13 — hence the extra `../` hop.)
 For the deeper narrative on what's real versus stub in this product, and what a real, expensive
 production run actually looked like against this design, read
-[`../lessons/model-factory/`](../lessons/model-factory/README.md) — this folder is the code and the
+`fine-tuning/lessons/model-factory/` (in `emanate-tecum-workflow`, not this repo) — this folder is the code and the
 data; that one is the story of running it for real. See `AGENTS.md` for the dense index, including
 the stage-by-stage real/stub table and where the real run artifacts now live.
 
@@ -66,7 +66,7 @@ In practice, every real fine-tune run to date (PTC Steel, Grand Steel) reached S
 CLI, then had its actual train/eval/activate work happen as session-driven manual REST calls and
 scripts sitting in `runs/<org>/`, outside `factory.py` entirely — not a failure of this code, just
 the honest state of what's automated versus what's still a human running commands by hand. Read
-[`../lessons/model-factory/architecture/`](../lessons/model-factory/architecture/README.md) for the
+`fine-tuning/lessons/model-factory/architecture/` (cross-repo) for the
 full stage-by-stage account of how that gap actually played out on a real, paid training job.
 
 ## Where the real run artifacts live
@@ -101,7 +101,7 @@ narrative, not a replacement for reading them.
 kickoff premise ("the schema itself is missing from `origin/main`") was already stale by the time
 Discovery ran — the three `factory_models` migrations had already shipped via platform-alpha
 PR #2180. The real gap was data, not schema: of the 10 real trained models
-([`../models/INDEX.md`](../models/INDEX.md)), `grand-steel-v2-agent` and `ptc-steel-v7-agent` had
+(`company-brain/models/INDEX.md`, cross-repo), `grand-steel-v2-agent` and `ptc-steel-v7-agent` had
 no catalog row at all, and `grand-steel-v1-agent`'s row was stuck on its
 day-training-completed `pending` state for two weeks, predating the diagnostic waves that reached
 this program's `FINALIZED_NO_TRAIN` verdict. Three separate one-off writers existed
@@ -127,7 +127,7 @@ small test gaps found during the rebase (`layoutForceGraph` determinism, `nodes.
 `AggregateGraphControls` 2–12 session floor/cap boundary). Full suite: 18,216/18,229 passing (13
 failures are pre-existing, environment-gated — a live Microsoft Graph mailbox, an Apollo API key,
 or local Docker, none touching the graph). Full detail:
-[`../../PRs/factory-graph-v2/PRQAResults.md`](../../PRs/factory-graph-v2/PRQAResults.md). Pushed,
+`PRs/factory-graph-v2/PRQAResults.md` (cross-repo). Pushed,
 **not merged** — Daniel asked for an independent reviewer rather than merging his own PR.
 
 **Deliberately stashed, not built here:** a separate timeline/session-clustering utility redesign

@@ -106,5 +106,5 @@ feature rather than a loud refusal, and it is called out as such in
 
 `bin/hooks/` is for hooks this folder owns. Anything new needs: the same exit-0 contract, a
 staged snippet in `WIRING.md` rather than an applied edit, a row in the table at the top of
-this file, and — if it makes a claim about what it measures — its evidence in
-[`../../reference/verified-facts.md`](../../archive/foreign-repo-provenance-2026-08-18/verified-facts.md).
+this file, and — if it makes a claim about what it measures — the evidence for that claim
+recorded inline here, with the date it was measured and how.

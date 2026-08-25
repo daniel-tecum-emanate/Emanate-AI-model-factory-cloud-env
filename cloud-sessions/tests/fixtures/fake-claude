@@ -6,7 +6,7 @@
 # dispatch a cloud session, or consume a rate limit. The suite also puts this file
 # on PATH as `claude`, so even a code path that ignored CS_CLAUDE_BIN lands here.
 #
-# It reproduces the output SHAPES recorded in reference/verified-facts.md, and
+# It reproduces the output SHAPES recorded by hand from a real dispatch, and
 # nothing else. It never touches the network.
 #
 # Controlled entirely by environment variables so a test can bend one detail:

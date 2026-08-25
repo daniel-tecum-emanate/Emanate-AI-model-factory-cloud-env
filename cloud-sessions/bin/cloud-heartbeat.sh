@@ -7,9 +7,8 @@
 # this repo (emanate-tecum-workflow) — this repo's board is
 # ../../coordination/heartbeat/STATE.md, a different, unconnected system.
 #
-# A cloud VM's local telemetry DIES WITH THE VM (deliberately — see the
-# now-archived ../archive/foreign-repo-provenance-2026-08-18/verified-facts.md),
-# and the heartbeat board at
+# A cloud VM's local telemetry DIES WITH THE VM (deliberately — no telemetry
+# persistence in cloud VMs, confirmed 2026-08-14), and the heartbeat board at
 # atlas-os/heartbeat/STATE.md does not travel to a cloud session in any useful way
 # (V-021). So the only channel by which a cloud agent's liveness can reach a laptop
 # that may be closed is **git push**. This script is that channel: it writes one

@@ -40,7 +40,8 @@ the same blindness the first three had.
 `cloud-heartbeat.sh`'s own plumbing — JSON file, dedicated ref namespace, hash-object /
 write-tree / commit-tree, silent-degrade-except-on-real-refusal exit codes — but answers the
 claim question instead of the liveness one. Full design:
-[`04-multi-session-coordination-design.md`](../../PRs/model-factory-cloud-environment-v1/04-multi-session-coordination-design.md).
+`PRs/model-factory-cloud-environment-v1/04-multi-session-coordination-design.md`
+(in `emanate-tecum-workflow`, not this repo).
 
 ## The shape of it
 

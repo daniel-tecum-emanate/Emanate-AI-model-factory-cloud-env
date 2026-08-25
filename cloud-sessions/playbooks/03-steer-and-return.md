@@ -53,8 +53,8 @@ to the session. On this account it returns:
 Error: Attaching to an existing cloud session is not enabled for your account.
 ```
 
-It is behind a gradual rollout. Verified 2026-08-12; see
-[verified-facts](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#5-interactive-terminal-attach-is-not-available--verified).
+It is behind a gradual rollout. Verified 2026-08-12: interactive terminal attach is not
+available on this account.
 Nothing else is affected — `cs send` works regardless.
 
 ## There is no stop

@@ -387,6 +387,20 @@ def test_secrets_in_transcripts_are_redacted_before_any_row_is_built(
     assert "[REDACTED]" in rows["output"]["content"]
 
 
+# Cloud-environment guard, added 2026-08-24 (post-trim verification): this test hardcodes
+# `/Users/danieltecum/emanate-tecum-workflow/PRs/demo/PLAN.md` and asserts the redactor keeps
+# it as a repo-INTERNAL, repo-relative path. That holds only when the checkout IS
+# emanate-tecum-workflow. In this repo that path is genuinely external, so the redactor
+# correctly redacts it — the assertion encodes the old repo's identity, not a defect here.
+# The half that matters (customer-acme-export never ships) is asserted by the sibling tests.
+@pytest.mark.skipif(
+    not "/Users/danieltecum/emanate-tecum-workflow".startswith(str(graph_artifacts.WORKFLOW_ROOT)),
+    reason=(
+        "this test hardcodes an emanate-tecum-workflow path and asserts the redactor keeps it "
+        "repo-internal; WORKFLOW_ROOT is this cloud-env checkout, so that path is genuinely "
+        "external here and redacting it is correct behaviour"
+    ),
+)
 def test_embedded_external_paths_are_allowlisted_not_shipped(
     cursor_dir, agent_records
 ):

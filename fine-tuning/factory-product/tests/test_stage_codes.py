@@ -102,7 +102,7 @@ def test_report_filename_prefix_stays_positional(tmp_path, monkeypatch):
 
 
 def test_status_output_renders_canonical_codes(capsys, monkeypatch, tmp_path):
-    monkeypatch.setattr(factory, "run_dir", lambda slug: tmp_path)
+    monkeypatch.setattr(factory, "run_dir", lambda slug, stream="per-account": tmp_path)
     factory.print_status("qa-dryrun-synth")
     out = capsys.readouterr().out
     assert "S6g launch" in out

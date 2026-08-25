@@ -12,6 +12,8 @@ table, which this parser intentionally does not read) = 76 total.
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 FACTORY_DIR = HERE.parent
 sys.path.insert(0, str(FACTORY_DIR))
@@ -22,6 +24,25 @@ from lessons_sync import (  # noqa: E402
     build_lesson_rows,
     parse_error_register,
     parse_playbook_lessons,
+)
+
+# --- cloud-environment guard, added 2026-08-24 (post-trim verification) ---
+# This repo is the fine-tuning CLOUD environment. It carries `fine-tuning/` +
+# `cloud-sessions/` only; the canon files below live in `emanate-tecum-workflow`
+# and were never imported. Without this guard these tests raise FileNotFoundError,
+# which reads as "the harness is broken" rather than "an input from another repo
+# is not here". The condition is the file's ACTUAL absence, so on the operator's
+# machine (where the canon exists) they run exactly as before and can still fail
+# for real reasons.
+pytestmark = pytest.mark.skipif(
+    not DEFAULT_PLAYBOOK_PATH.exists() or not DEFAULT_ERROR_REGISTER_PATH.exists(),
+    reason=(
+        "canon lesson files are not in this repo: "
+        "company-brain/3-execution/PLAYBOOK-AND-LESSONS.md and ERROR-REGISTER.md live in "
+        "emanate-tecum-workflow. lessons_sync's canon parse is a maintenance job, not a "
+        "pipeline stage — factory.py only calls attribute_lesson_to_run(), which is a DB "
+        "update and reads neither file."
+    ),
 )
 
 EXPECTED_LESSON_COUNT = 56

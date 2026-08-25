@@ -1,12 +1,13 @@
 # AGENT.md — operating rules for this folder
 
-> **Provenance note, 2026-08-18:** the reference-record claims this file points to
-> (`reference/verified-facts.md`, `reference/billing.md`, `reference/this-repo-in-the-cloud.md`,
-> `reference/porting-audit-2026-08-17.md`) were archived to
-> [`archive/foreign-repo-provenance-2026-08-18/`](archive/foreign-repo-provenance-2026-08-18/README.md) —
-> they were verified against a different repository
-> (`daniel0tgc/internal-company-tool`), not this one. The operating rules below (ground
-> rules, the safe four, the git gate, the deny-listed paths) are mechanism-level and stand.
+> **Provenance note, updated 2026-08-24:** the reference-record files this document used to
+> cite (`verified-facts.md`, `billing.md`, `this-repo-in-the-cloud.md`,
+> `porting-audit-2026-08-17.md`) were verified against a **different repository**
+> (`daniel0tgc/internal-company-tool`), not this one. They were archived in 2026-08-18 and
+> have now been removed from this repo entirely, which is scoped to the fine-tuning harness.
+> Where their findings still matter they are stated inline below rather than cited; the
+> files themselves remain in git history. The operating rules below (ground rules, the safe
+> four, the git gate, the deny-listed paths) are mechanism-level and stand.
 
 Read this before doing anything in `cloud-sessions/`. It is the local authority; the
 human-facing guide is [`README.md`](README.md).
@@ -28,7 +29,9 @@ remains portable with bash + python3 + git + the `claude` CLI. `bin/cloud-claim.
 same "no" as the rest of the fleet half: it depends on nothing under `atlas-os/`. (The
 "Depends on `atlas-os/`" table itself lives in
 [`bin/README.md`](bin/README.md#dependencies-honestly), not here — this paragraph is this
-file's own record of the same fact.) Porting: [`porting-audit-2026-08-17.md`](archive/foreign-repo-provenance-2026-08-18/porting-audit-2026-08-17.md).
+file's own record of the same fact.) Porting: see
+[`playbooks/09-porting-to-another-repo.md`](playbooks/09-porting-to-another-repo.md), which
+carries the conclusions of the 2026-08-17 porting audit.
 Several surfaces *outside* the folder also depend on it — see the note under the layout
 table.
 
@@ -44,15 +47,16 @@ a subfolder. If you need a new document, it belongs in `playbooks/` (how to do a
 |---|---|---|
 | `bin/` | `cs` (the operator entrypoint), `cloud-heartbeat.sh` (the cloud-side emitter), `fleet_ui.py` (the page), `hooks/` | keep them dependency-free: bash + python3 + git + the `claude` CLI. Per-file cost and side effects: [`bin/README.md`](bin/README.md) |
 | `playbooks/` | task-shaped instructions, numbered in reading order | one workflow per file |
-| `reference/` | claims, limits, matrices, error tables, competitor architecture, and the dated probe reports | every claim carries a status tag; a probe report is dated evidence, not current state |
+| `reference/` | claims, limits, matrices, error tables, competitor architecture | every claim carries a status tag and states its evidence inline — the date it was measured and how |
 | `tests/` | `run.sh`, the regression suite for `bin/cs`, and its `RESULTS.md` log | $0 and offline by construction — it stubs `claude`, `gh` and `open`, and never dispatches. Run it after any change to `cs` |
 | `state/` | `sessions.jsonl` (the dispatch ledger, **tracked on purpose** since 2026-08-14), `exodus-manifest.json`, and `fleet/` — the cloud agents' own heartbeat files | runtime data, append-only, **never hand-edited**. `cs rm` removes a ledger row; `cs fleet --prune` is the only thing that deletes a heartbeat. See [`state/README.md`](state/README.md) |
-| `archive/2026-07-29/` | the original research record, superseded | **read-only. Do not fix, update, or delete it** |
 
-One surface lives outside this folder and depends on it: the `/cloud` slash command at
-[`../.claude/commands/cloud.md`](../.claude/commands/cloud.md), which walks a session
-through preparing a handoff. It names `cs doctor`, `cs new --cloud --plan` and this
-folder's playbooks, so a change to `cs`'s interface can leave it stale.
+One surface depends on this folder but **does not exist in this repo**: the `/cloud` slash
+command (`.claude/commands/cloud.md`), which walks a session through preparing a handoff. It
+lives in `emanate-tecum-workflow` and was not part of the fine-tuning-harness import, so
+there is nothing here to open. It names `cs doctor`, `cs new --cloud --plan` and this
+folder's playbooks, so a change to `cs`'s interface can leave it stale — fix it over there,
+not here.
 
 ## Ground rules
 
@@ -62,8 +66,9 @@ same session that made them.
 
 1. **Tag every claim.** `VERIFIED` (run here, output quoted) · `DOCS` (Anthropic's
    documentation, not exercised here) · `UNVERIFIED` · `DISPROVEN`. "It should work" is not
-   a status. New claims go in [`verified-facts.md`](archive/foreign-repo-provenance-2026-08-18/verified-facts.md)
-   with the command and its output.
+   a status. Record a new claim next to the thing it is about — in the playbook or
+   `reference/` file that relies on it — with the command and its output, and the date. There
+   is no separate evidence register in this repo; the claim and its proof live together.
 
 2. **Verify a claim the way the claim says to verify it.** In July, `claude --cloud` was
    declared non-existent because it was absent from `--help` — when the research being
@@ -76,17 +81,19 @@ same session that made them.
 
 4. **Never let a degraded condition read as a meaningful value.** A rate limit is not an
    empty list. A missing ownership record is not permission. A missing TTY is not "run it
-   locally instead". A blocked host is not a hang. When provenance is unknown, refuse. Two
-   of the incidents behind this rule are in the archive; the tool written to enforce it
+   locally instead". A blocked host is not a hang. When provenance is unknown, refuse. The
+   tool written to enforce this rule
    then broke it ten ways of its own, and on 2026-08-14 a probe found the *test suite*
    asserting twelve refusals against an exit code that was always 0 — a green run measuring
    nothing.
 
 5. **Supersede, never delete.** A wrong claim gets marked and corrected in place, with what
-   corrected it. The record of how a wrong belief formed is the useful part. This is why
-   `archive/2026-07-29/` still exists in full despite being superseded, and why the
+   corrected it. The record of how a wrong belief formed is the useful part. This is why the
    telemetry fix that shipped and was reverted an hour later is written up with **both**
-   halves rather than tidied into whichever one is current.
+   halves rather than tidied into whichever one is current. (Scope note, 2026-08-24: whole
+   *documents* belonging to other initiatives have been removed from this repo, which is
+   about narrowing scope, not about erasing corrections. Git history keeps them. This rule
+   still governs every claim in every file that remains.)
 
 6. **Distinguish "not permitted" from "not possible".** GitHub Actions works fine
    technically and is forbidden by policy. Those need different handling and different
@@ -116,8 +123,7 @@ same session that made them.
   Daniel, 2026-08-14. Do not add a dependency that calls OpenAI, Gemini, Deepgram, Hugging
   Face or any hosted model API, and do not wire up `ANTHROPIC_API_KEY`: an API key bills per
   token *and* disables `--cloud`, `--teleport`, Remote Control and routines, which all
-  require subscription auth. It costs money and removes capability at the same time. See
-  [`billing.md`](archive/foreign-repo-provenance-2026-08-18/billing.md).
+  require subscription auth. It costs money and removes capability at the same time.
 - **Firing a routine does not disarm it.** `run` does not consume `run_once_at`, and a
   disabled routine still displays a future `next_run_at` — `enabled` is the deciding field.
   Create → run → **disable**, as one sequence. Nine probe routines were left armed on
@@ -137,11 +143,11 @@ same session that made them.
   tool names and Bash idioms, not filesystem writes (`V-023`).
 - **A cloud session's own hook telemetry does not survive the VM, and that is deliberate.**
   Hooks fire; `atlas-os/telemetry/raw/` is gitignored and dies with the machine. Do not
-  "fix" this by having a session commit its own trace — that was shipped, and reverted an
-  hour later, because it turns an involuntary record into a cooperative one and truncates
-  it at the last commit. See
-  [`verified-facts.md`](archive/foreign-repo-provenance-2026-08-18/verified-facts.md#the-first-fix-was-wrong-and-was-reverted-the-same-hour--superseded-2026-08-14)
-  and [`this-repo-in-the-cloud.md`](archive/foreign-repo-provenance-2026-08-18/this-repo-in-the-cloud.md).
+  "fix" this by having a session commit its own trace — that was shipped on 2026-08-14, and
+  reverted the same hour, because it turns an involuntary record into a cooperative one and
+  truncates it at the last commit. The channel that *is* meant to survive the VM is
+  [`bin/cloud-heartbeat.sh`](bin/cloud-heartbeat.sh)'s pushed git ref — use that, not a
+  committed trace.
 - **Routines silently inherit every connected claude.ai connector**, including Gmail and
   Drive, and run with no approval prompts. **An explicit `mcp_connections: []` does not
   stop this** — verified 2026-08-17, a routine created with an empty list came back holding
@@ -154,21 +160,25 @@ same session that made them.
 
 - New capability or workflow → a numbered file in `playbooks/`, plus a row in
   [`reference/surfaces.md`](reference/surfaces.md).
-- New claim → [`verified-facts.md`](archive/foreign-repo-provenance-2026-08-18/verified-facts.md), with the
-  status tag and the actual command output.
+- New claim → stated inline in the playbook or `reference/` file that depends on it, with
+  the status tag and the actual command output.
 - New failure mode → [`reference/troubleshooting.md`](reference/troubleshooting.md), as
   *error text → what it actually means → fix*.
 - Changed `bin/cs` → run `bash cloud-sessions/tests/run.sh` (it costs nothing and
   dispatches nothing), then `cs doctor` on the real machine, because the suite stubs
   `claude`, `gh` and `open` and cannot tell you what the real ones answer. Update
-  [`bin/README.md`](bin/README.md), the command block in [`README.md`](README.md) and
-  [`../.claude/commands/cloud.md`](../.claude/commands/cloud.md) if the interface moved.
+  [`bin/README.md`](bin/README.md) and the command block in [`README.md`](README.md) if the
+  interface moved. (The `/cloud` slash command also names that interface, but it lives in
+  `emanate-tecum-workflow` and is not in this repo — see the layout section above.)
 - New probe report → a row in [`reference/README.md`](reference/README.md), and fold its
-  findings into `reference/verified-facts.md`. A report is not a status; leaving it as the
-  only home for a finding means the next reader has to diff seven files to learn the
-  current answer.
-- Anything superseded in the archive → leave the archive alone and note the correction in
-  `reference/`.
+  findings into the `reference/` or playbook file the finding is actually about. A report is
+  not a status; leaving it as the only home for a finding means the next reader has to diff
+  seven files to learn the current answer.
+- Anything superseded → correct it in place in the `reference/` or playbook file that
+  carries it, and say what changed and when. There is no `archive/` in this repo — the
+  2026-08-24 harness trim removed it (it held foreign-repo provenance and the superseded
+  keep-the-laptop-awake research record). Superseded material goes to git history, not to a
+  folder.
 
 ## Current state, one line
 
@@ -179,5 +189,5 @@ four BSD/GNU bugs, this repo's hooks and deny rules **do** reach a cloud session
 session's own telemetry still dies with the VM by design. Remote Control **connects**, with
 the phone half untested; interactive terminal attach is **gated off** for this account.
 GitHub is connected to the Claude account — before that, dispatch was silently bundling
-instead of cloning, which is still the correction worth reading first. Details and dates:
-[`verified-facts.md`](archive/foreign-repo-provenance-2026-08-18/verified-facts.md).
+instead of cloning, which is still the correction worth reading first. Dates and the
+per-mechanism detail are carried by the playbook that uses each mechanism.

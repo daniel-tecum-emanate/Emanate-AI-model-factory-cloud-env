@@ -59,11 +59,11 @@ def _run_launch(tmp_path, cfg, args, total=22.56, proj_status="ok"):
 
     approvals = []
     approval_channels = []
-    with patch.object(factory, "run_dir", lambda s: run_path), \
+    with patch.object(factory, "run_dir", lambda s, stream="per-account": run_path), \
          patch.object(factory, "write_report", fake_write_report), \
          patch.object(factory, "_record_gate_decision", fake_record_gate_decision), \
          patch.object(factory, "record_approval",
-                      lambda s, st, note, via=factory.APPROVED_VIA_FLAG:
+                      lambda s, st, note, via=factory.APPROVED_VIA_FLAG, stream="per-account":
                       (approvals.append(note), approval_channels.append(via))), \
          patch.object(factory, "_gate_approved_via_sync", lambda *a, **k: False):
         factory.stage_launch(cfg, SLUG, args)

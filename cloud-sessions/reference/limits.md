@@ -5,10 +5,9 @@ mysteriously stopped.
 
 Sourced from Anthropic's documentation as of **2026-08-12** unless marked otherwise —
 `DOCS`, in this folder's vocabulary. Where a number has since been **measured inside a real
-cloud VM** (2026-08-14) it is marked as such and shown next to the documented one; the
-evidence is in [`verified-facts.md`](verified-facts.md) and the probe reports indexed in
-[`README.md`](README.md). Where the two disagree, the measurement wins and the documented
-value is kept so the drift is visible.
+cloud VM** (2026-08-14) it is marked as such and shown next to the documented one. Where
+the two disagree, the measurement wins and the documented value is kept so the drift is
+visible.
 
 ---
 
@@ -27,7 +26,7 @@ limit; without them, further runs are rejected until the window resets.
 ## The cloud VM
 
 Documented values, with what was **measured** in a real VM on 2026-08-14 beside them
-(probe 1; full output in [`cloud-vm-probe-2026-08-14.md`](cloud-vm-probe-2026-08-14.md)).
+(probe 1).
 
 | | Documented | Measured 2026-08-14 |
 |---|---|---|
@@ -53,9 +52,10 @@ GCC/Clang/cmake/ninja/conan · Docker + compose · PostgreSQL 16 · Redis 7 · g
 ripgrep, tmux, vim.
 
 Measured versions on PATH: `python3` → **3.11.15**, `node` → **v22.22.2**, `git` →
-**2.43.0**. Python 3.12 is also on the image but *not* what `python3` resolves to, which is
-the whole of the `--break-system-packages` correction in
-[`this-repo-in-the-cloud.md`](this-repo-in-the-cloud.md#setup-script).
+**2.43.0**. Python 3.12 is also on the image but *not* what `python3` resolves to — which is
+why a setup script that pip-installs into the system Python needs
+`--break-system-packages`, and why targeting 3.12 explicitly is not the same as targeting
+`python3`.
 
 Anything else — the .NET SDK, `gh` — needs a [setup script](../playbooks/06-environments.md).
 `gh` is genuinely absent; `apt-get install -y gh` took **15 seconds** and needed no `sudo`.
@@ -86,7 +86,7 @@ Every session runs in a **cloud environment** that sets one network access level
 
 Requests to non-allowlisted hosts fail with a `403` whose **plain-text body** names the
 host — `request blocked: no rule or allowlist entry allows host "example.com"`. Measured
-2026-08-14; see [`cloud-vm-probe-2026-08-14.md`](cloud-vm-probe-2026-08-14.md). There is
+2026-08-14 in a real VM (probe 1), and re-confirmed on a second VM (probe 2). There is
 **no `x-deny-reason` header** on this proxy, and a plain `curl` swallows the body on a
 CONNECT tunnel failure, so a blocked host can look like a hang or a generic failure.
 

@@ -7,12 +7,12 @@
 > `PRs/model-factory-finetune-launcher-v1/PRContext.md` executed. This file's own content
 > (the audit measurements, the checklist) is mechanism-level and stands as-is.
 
-**Status:** ACTIVE · as_of 2026-08-17. Built from the porting audit (moved to
-[`../archive/foreign-repo-provenance-2026-08-18/porting-audit-2026-08-17.md`](../archive/foreign-repo-provenance-2026-08-18/porting-audit-2026-08-17.md) —
-performed against `daniel0tgc/internal-company-tool`, the origin repo, dated evidence not
-rewritten as this repo's own), which performed the naive port into a throwaway repo and
-measured what happened. Every "breaks" claim below is `VERIFIED` there; every "should work"
-is tagged where it is not.
+**Status:** ACTIVE · as_of 2026-08-17. Built from a porting audit performed 2026-08-17
+against `daniel0tgc/internal-company-tool`, the origin repo — it did the naive port into a
+throwaway repo and measured what happened. That audit's own writeup is no longer carried in
+this repo (it was dated evidence about a different repo), but its findings are what the
+tables below record: every "breaks" claim below was `VERIFIED` by it, and every "should
+work" is tagged where it is not.
 
 Previous: [`08-concurrent-sessions-and-exodus.md`](08-concurrent-sessions-and-exodus.md).
 
@@ -25,7 +25,7 @@ and ran everything safe. Result:
 
 | | |
 |---|---|
-| **Works anywhere** | `new` `start` `handoff` `send` `ls` `track` `rm` `env` `doctor` `sessions` `shell-init`, the whole test suite (**467 green inside the transplant**), `doc-drift.sh` |
+| **Works anywhere** | `new` `start` `handoff` `send` `ls` `track` `rm` `env` `doctor` `sessions` `shell-init`, the whole test suite (**467 green inside the transplant**) |
 | **Refuses loudly without `atlas-os/`** | `cs board` (exit 1, `DEGRADED … PARTIAL, not empty`), `cs exodus` (exit 1, names the missing `heartbeat.py`), `session_register.sh` (exit 0 by contract, logs the skip) |
 | **Breaks silently — fix before porting** | the travelling ledger, the symlink install, the hardcoded repo/account literals, and four more (all fixed as of `b229c88`, except where noted below) |
 
@@ -104,9 +104,9 @@ the experiment it is, and write down what happened.
 
 ## Related
 
-- [`../archive/foreign-repo-provenance-2026-08-18/porting-audit-2026-08-17.md`](../archive/foreign-repo-provenance-2026-08-18/porting-audit-2026-08-17.md) —
-  the measurements, the coupling inventory, and the full silent-break list (archived
-  2026-08-18 — dated evidence against the origin repo, not this one).
+- The porting audit of 2026-08-17 — the measurements, the coupling inventory, and the full
+  silent-break list — is no longer carried here; it was dated evidence against the origin
+  repo, not this one. Its conclusions are folded into the tables above.
 - [`../AGENT.md`](../AGENT.md) — the self-containment claim, superseded 2026-08-17.
 - [`08-concurrent-sessions-and-exodus.md`](08-concurrent-sessions-and-exodus.md) — what
   you are porting, if decision 1 is yes.

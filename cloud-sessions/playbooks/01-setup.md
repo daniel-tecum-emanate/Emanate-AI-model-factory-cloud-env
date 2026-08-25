@@ -92,8 +92,8 @@ your Claude account.** They are separate grants. Skip this and things appear to 
 **cannot push a branch or open a PR**, and **routines fail outright** with
 `403 You don't have access to a repository this routine uses`.
 
-That is exactly what happened here on 2026-08-12 — see
-[verified-facts 4a](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#4a-but-it-was-a-bundle-not-a-github-clone--verified-correction).
+That is exactly what happened here on 2026-08-12: what looked like a GitHub clone was in
+fact a bundle upload, which is why the session could read the code but could not push.
 
 Two ways, either works:
 

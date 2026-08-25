@@ -684,7 +684,7 @@ has "handoff/brief-requires-branch-and-push" "the brief requires commit-and-push
 has "handoff/brief-requires-pr"  "the brief asks for a pull request" "Open a pull request"
 has "handoff/brief-asks-for-unverified" "the brief demands the session state what it could NOT verify" "could NOT verify"
 # The blocked-host signal is a plain-text 403 BODY, not an x-deny-reason header - measured
-# in a real cloud VM 2026-08-14 (reference/cloud-vm-probe-2026-08-14.md). These two checks
+# in a real cloud VM 2026-08-14 (probe 1). These two checks
 # pinned the header claim and correctly went red when it was corrected.
 has "handoff/brief-covers-blocked-hosts" "the brief tells the session what to do with a blocked-host 403" "request blocked: no rule or"
 has "handoff/brief-warns-curl-hides-body" "the brief warns that plain curl swallows the 403 body, so a block can look like a hang" "SWALLOWS that body"
@@ -1919,7 +1919,7 @@ same() { [ "$1" = "$2" ]; }
 ex_partition() { printf '%s\n' "$1" | awk '/^unit /{lane=$2; next} !/^     /{lane=""; next} /^     goal:/{next} lane != ""{print lane, $NF}' | LC_ALL=C sort; }
 
 if [[ "$EXODUS_OK" != yes ]]; then
-  _skip "exodus/ALL" "atlas-os heartbeat.py / worktree.py / board template not found next to this checkout — the exodus fixture cannot be built (62 checks not run: sections 13-14 in full, see reference/OPEN-GAPS.md G24)"
+  _skip "exodus/ALL" "atlas-os heartbeat.py / worktree.py / board template not found next to this checkout — the exodus fixture cannot be built (62 checks not run: sections 13-14 in full, see G24)"
   COLLAPSED=$((COLLAPSED+62))
 else
   EXR="$WORK/repos/exodus-fix"
@@ -2173,7 +2173,7 @@ sec "15 — the auto-register hook: observability must never break the observed"
 
 HOOKR="$WORK/repos/hook-fix"
 if [[ "$EXODUS_OK" != yes || ! -f "$REAL_HOOK" ]]; then
-  _skip "hook/ALL" "the hook or the atlas-os fixture inputs are missing — section 15 skipped in full (29 checks not run, see reference/OPEN-GAPS.md G24): $REAL_HOOK"
+  _skip "hook/ALL" "the hook or the atlas-os fixture inputs are missing — section 15 skipped in full (29 checks not run, see G24): $REAL_HOOK"
   COLLAPSED=$((COLLAPSED+29))
 else
   mkdir -p "$HOOKR/cloud-sessions/bin/hooks" "$HOOKR/cloud-sessions/state" "$HOOKR/atlas-os/bin" "$HOOKR/atlas-os/heartbeat"
@@ -2554,7 +2554,7 @@ CLAIM_OK=yes
 for f in "$HB_REAL" "$BOARD_TMPL"; do [[ -f "$f" ]] || CLAIM_OK=no; done
 
 if [[ "$CLAIM_OK" != yes ]]; then
-  _skip "claim/ALL" "heartbeat.py / board template not found next to this checkout — the claim fixture cannot be built (16 checks not run: section 19 in full, see reference/OPEN-GAPS.md G24)"
+  _skip "claim/ALL" "heartbeat.py / board template not found next to this checkout — the claim fixture cannot be built (16 checks not run: section 19 in full, see G24)"
   COLLAPSED=$((COLLAPSED+16))
 else
   CLR="$WORK/repos/claim-fix"
@@ -2717,7 +2717,7 @@ FLEET_OK=yes
 for f in "$HB_SH" "$UI_PY"; do [[ -f "$f" ]] || FLEET_OK=no; done
 
 if [[ "$FLEET_OK" != yes ]]; then
-  _skip "fleet/ALL" "cloud-heartbeat.sh or fleet_ui.py not present — the fleet fixture cannot be built (19 checks not run: section 20 in full, see reference/OPEN-GAPS.md G24)"
+  _skip "fleet/ALL" "cloud-heartbeat.sh or fleet_ui.py not present — the fleet fixture cannot be built (19 checks not run: section 20 in full, see G24)"
   COLLAPSED=$((COLLAPSED+19))
 else
   FLR="$WORK/repos/fleet-fix"
@@ -2890,9 +2890,9 @@ if [[ "$SKIP" -gt 0 ]]; then
   printf '%s%d skipped check(s) — a skipped check is not a passed check.%s\n' "$Y" "$SKIP" "$O"
 fi
 if [[ "$COLLAPSED" -gt 0 ]]; then
-  printf '%s%d additional check(s) never ran at all — collapsed into the skip lines above, not counted in "%d skipped." See G24, reference/OPEN-GAPS.md.%s\n' \
+  printf '%s%d additional check(s) never ran at all — collapsed into the skip lines above, not counted in "%d skipped." See G24.%s\n' \
     "$Y" "$COLLAPSED" "$SKIP" "$O"
-  log "**$COLLAPSED additional check(s) never ran** — collapsed into an \`/ALL\` skip line above, not individually counted in \"$SKIP skipped.\" See G24 in \`reference/OPEN-GAPS.md\`."
+  log "**$COLLAPSED additional check(s) never ran** — collapsed into an \`/ALL\` skip line above, not individually counted in \"$SKIP skipped.\" See G24."
 fi
 if [[ "$FAIL" -gt 0 ]]; then
   printf '%snot green.%s  failed: %s\n' "$R" "$O" "${FAILED_NAMES[*]}"
