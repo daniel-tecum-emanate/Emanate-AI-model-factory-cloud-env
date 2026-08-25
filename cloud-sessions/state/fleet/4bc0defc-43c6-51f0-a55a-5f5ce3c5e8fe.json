@@ -1,5 +1,5 @@
 {
-  "beats": 2,
+  "beats": 3,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -23,6 +23,11 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T06:00:09Z",
       "verb": "start"
+    },
+    {
+      "status": "ACTIVE",
+      "ts": "2026-08-25T06:00:28Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -32,13 +37,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "start",
-  "note": "orchestrating grand-steel fine-tune pipeline (correcting erroneous test beat above); env check passed: pwd=/home/user/Emanate-AI-model-factory-cloud-env, fine-tuning/factory-product/factory.py present",
+  "last_verb": "beat",
+  "note": "env verified: pwd=/home/user/Emanate-AI-model-factory-cloud-env, fine-tuning/factory-product/factory.py present. Fire payload has relay_claim_code but no app_base_url, so sync exchange cannot be constructed (won't guess app_base_url) - running without DB sync per fail-open behavior",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "4bc0defc-43c6-51f0-a55a-5f5ce3c5e8fe",
   "started_at": "2026-08-25T06:00:09Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T06:00:09Z"
+  "updated_at": "2026-08-25T06:00:28Z"
 }
