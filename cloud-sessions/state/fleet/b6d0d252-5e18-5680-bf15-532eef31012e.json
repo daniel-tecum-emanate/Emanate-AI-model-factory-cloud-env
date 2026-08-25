@@ -1,6 +1,12 @@
 {
-  "beats": 2,
-  "blocker": null,
+  "beats": 3,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and live by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd (lane finetune-grand-steel, stage launch); that session is itself BLOCKED at the S6g launch gate (projected cost $48.18 vs cap $50, stop-gate $100). This session (run-1) will not proceed to avoid colliding on the same org+stream.",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run-1 fire, and to approve or reject the existing S6g launch gate for grand-steel",
+    "restated_at": "2026-08-25T06:00:00Z",
+    "since": "2026-08-25T06:00:00Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -22,6 +28,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:47Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and live by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd (lane finetune-grand-steel, stage launch); that session is itself BLOCKED at the S6g launch gate (pr",
+      "kind": "needs-human-action",
+      "phase": "relay_claim_code present in fire payload but app_base_url absent - cannot perform sync exchange; running without DB sync for this run",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T06:00:00Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -31,13 +45,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "verified factory.py present at fine-tuning/factory-product/factory.py; pwd=/home/user/Emanate-AI-model-factory-cloud-env",
   "phase": "relay_claim_code present in fire payload but app_base_url absent - cannot perform sync exchange; running without DB sync for this run",
   "progress": null,
   "schema": 1,
   "session_id": "b6d0d252-5e18-5680-bf15-532eef31012e",
   "started_at": "2026-08-25T05:59:26Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:47Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T06:00:00Z"
 }
