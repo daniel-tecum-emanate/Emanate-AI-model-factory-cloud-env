@@ -1,5 +1,5 @@
 {
-  "beats": 1,
+  "beats": 2,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -16,6 +16,12 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:13Z",
       "verb": "start"
+    },
+    {
+      "phase": "running without DB sync - relay_claim_code present but app_base_url absent from fire payload, cannot construct exchange URL",
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:27Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -25,13 +31,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "start",
+  "last_verb": "beat",
   "note": "verified pwd and factory.py present at fine-tuning/factory-product/factory.py; orchestrating grand-steel fine-tune pipeline",
-  "phase": "",
+  "phase": "running without DB sync - relay_claim_code present but app_base_url absent from fire payload, cannot construct exchange URL",
   "progress": null,
   "schema": 1,
   "session_id": "dbafd4c5-3de7-5694-b67d-9a084488c7a9",
   "started_at": "2026-08-25T05:59:13Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:13Z"
+  "updated_at": "2026-08-25T05:59:27Z"
 }
