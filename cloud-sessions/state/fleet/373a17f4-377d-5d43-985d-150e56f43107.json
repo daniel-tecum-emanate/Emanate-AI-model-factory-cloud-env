@@ -1,0 +1,37 @@
+{
+  "beats": 1,
+  "blocker": null,
+  "emitter": {
+    "name": "cloud-heartbeat.sh",
+    "version": 1
+  },
+  "ended_at": null,
+  "failure": null,
+  "git": {
+    "branch": "claude/determined-sagan-yak33n",
+    "head": "9eb1621"
+  },
+  "history": [
+    {
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:14Z",
+      "verb": "start"
+    }
+  ],
+  "host": {
+    "hostname": "vm",
+    "os": "Linux 6.18.44-fc-v21 x86_64",
+    "user": "root"
+  },
+  "kind": "cloud-heartbeat",
+  "lane": "finetune-grand-steel",
+  "last_verb": "start",
+  "note": "verified pwd and factory.py path present, starting orchestration",
+  "phase": "",
+  "progress": null,
+  "schema": 1,
+  "session_id": "373a17f4-377d-5d43-985d-150e56f43107",
+  "started_at": "2026-08-25T05:59:14Z",
+  "status": "ACTIVE",
+  "updated_at": "2026-08-25T05:59:14Z"
+}
