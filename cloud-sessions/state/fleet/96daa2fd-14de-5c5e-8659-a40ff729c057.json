@@ -1,5 +1,5 @@
 {
-  "beats": 1,
+  "beats": 2,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -16,6 +16,11 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:08Z",
       "verb": "beat"
+    },
+    {
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:17Z",
+      "verb": "start"
     }
   ],
   "host": {
@@ -24,14 +29,14 @@
     "user": "root"
   },
   "kind": "cloud-heartbeat",
-  "lane": "96daa2fd-14de-5c5e-8659-a40ff729c057",
-  "last_verb": "beat",
-  "note": "verified: pwd=/home/user/Emanate-AI-model-factory-cloud-env, fine-tuning/factory-product/factory.py present",
+  "lane": "finetune-grand-steel",
+  "last_verb": "start",
+  "note": "orchestrating grand-steel fine-tune pipeline",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "96daa2fd-14de-5c5e-8659-a40ff729c057",
-  "started_at": "2026-08-25T05:59:08Z",
+  "started_at": "2026-08-25T05:59:17Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:08Z"
+  "updated_at": "2026-08-25T05:59:17Z"
 }
