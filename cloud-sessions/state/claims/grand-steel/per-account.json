@@ -1,0 +1,28 @@
+{
+  "claimed_at": "2026-08-25T05:59:20Z",
+  "current_stage": "S1",
+  "emitter": {
+    "name": "cloud-claim.sh",
+    "version": 1
+  },
+  "heartbeat_ref": "refs/heads/cloud-fleet/a4e6b09e-c066-50d3-9740-1aff9f2ed8bd",
+  "held_by": "a4e6b09e-c066-50d3-9740-1aff9f2ed8bd",
+  "history": [
+    {
+      "by": "a4e6b09e-c066-50d3-9740-1aff9f2ed8bd",
+      "event": "claimed",
+      "stage": "S1",
+      "ts": "2026-08-25T05:59:20Z"
+    }
+  ],
+  "kind": "cloud-claim",
+  "lane": "finetune-grand-steel",
+  "model_stream": "per-account",
+  "org_slug": "grand-steel",
+  "prior_claim": null,
+  "release_reason": null,
+  "released_at": null,
+  "run_id": null,
+  "schema": 1,
+  "updated_at": "2026-08-25T05:59:20Z"
+}
