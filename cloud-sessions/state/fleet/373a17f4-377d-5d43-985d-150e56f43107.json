@@ -1,5 +1,5 @@
 {
-  "beats": 1,
+  "beats": 2,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -16,6 +16,12 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:14Z",
       "verb": "start"
+    },
+    {
+      "phase": "factory.py confirmed present, starting relay claim exchange step",
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:23Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -25,13 +31,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "start",
+  "last_verb": "beat",
   "note": "verified pwd and factory.py path present, starting orchestration",
-  "phase": "",
+  "phase": "factory.py confirmed present, starting relay claim exchange step",
   "progress": null,
   "schema": 1,
   "session_id": "373a17f4-377d-5d43-985d-150e56f43107",
   "started_at": "2026-08-25T05:59:14Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:14Z"
+  "updated_at": "2026-08-25T05:59:23Z"
 }
