@@ -1,6 +1,12 @@
 {
-  "beats": 3,
-  "blocker": null,
+  "beats": 4,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and live by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd (lane finetune-grand-steel, stage launch, heartbeat status=BLOCKED updated 2026-08-25T05:59:39Z). That session is itself blocked on the S6g launch gate: projected all-in cost $48.18 vs cap $50 (stop-gate $100), needs Daniel's approval via factory.py grand-steel --stage launch --approved or the Model Factory tab.",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run, and/or approve the pending S6g launch gate for grand-steel",
+    "restated_at": "2026-08-25T06:00:49Z",
+    "since": "2026-08-25T06:00:49Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -27,6 +33,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T06:00:34Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and live by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd (lane finetune-grand-steel, stage launch, heartbeat status=BLOCKED updated 2026-08-25T05:59:39Z). Th",
+      "kind": "needs-human-action",
+      "phase": "running without DB sync - relay_claim_code present but app_base_url absent from fire payload, cannot construct exchange call",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T06:00:49Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -36,13 +50,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "step 0 verified: pwd=/home/user/Emanate-AI-model-factory-cloud-env; fine-tuning/factory-product/factory.py present",
   "phase": "running without DB sync - relay_claim_code present but app_base_url absent from fire payload, cannot construct exchange call",
   "progress": null,
   "schema": 1,
   "session_id": "f4a73f96-cf6b-5c32-b85f-ef5ca971349b",
   "started_at": "2026-08-25T06:00:14Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T06:00:34Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T06:00:49Z"
 }
