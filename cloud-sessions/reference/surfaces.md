@@ -4,8 +4,7 @@ Every row is a distinct place Claude Code can execute. Pick by the **first colum
 is true of your situation**, not by which sounds most capable.
 
 Status values follow the folder rule in [`../AGENT.md`](../AGENT.md): `VERIFIED` means
-someone ran it on this machine and the output is quoted in
-[`verified-facts.md`](verified-facts.md).
+someone ran it on this machine and quoted the output, with the date, next to the claim.
 
 ---
 
@@ -24,8 +23,7 @@ someone ran it on this machine and the output is quoted in
 
 Only the first two rows survive a closed laptop *because the work is not on the laptop*.
 Everything else on that list keeps a session alive on your Mac, which means the Mac has
-to stay awake — a different problem with a different, worse answer (see
-[the archive](../archive/2026-07-29/PROBLEM.md), which is entirely about that problem).
+to stay awake — a different problem with a different, worse answer.
 
 ## Choosing
 
@@ -55,10 +53,10 @@ and the session cannot push back.
 
 | Approach | Why not |
 |---|---|
-| **GitHub Actions as a session host** | Dropped on policy, not capability. GitHub's hosted-runner terms forbid "any other activity unrelated to the production, testing, deployment, or publication of the software project associated with the repository", with a penalty ladder ending at account termination. Costing also failed independently (~$259/mo for 4×6h jobs/day). Full reasoning: [archive lane 06](../archive/2026-07-29/lanes/06-github-actions-DROPPED.md). `anthropics/claude-code-action@v1` for *repo-scoped* automation remains fine. |
-| **A paid always-on Linux box** (Hetzner ~€16/mo, DigitalOcean ~$24/mo) | Was the only approach that closed the attach/steer/detach gap in July. **That gap is now closed for free** by cloud sessions plus web/mobile plus `--teleport`. Do not buy a box before re-reading [archive lane 07](../archive/2026-07-29/lanes/07-always-on-vm-BLOCKED.md) and confirming the remaining gap is real. The one thing still missing is *interactive terminal attach*, and that is a rollout gate, not something a VPS fixes. |
-| **`pmset disablesleep` to run lid-shut** | Still works and is still the only lever for keeping the *Mac itself* awake with the lid shut, but it is now the fallback rather than the plan. It is root-only, undocumented, global, persists across reboots, and Apple's thermal guidance is explicitly against sustained load under a closed lid. If the work can move to the cloud, move it. [archive lane 02](../archive/2026-07-29/lanes/02-lid-close-pmset.md) |
-| **Cursor cloud agents** | A different vendor's product, proven working in July against a different repo. Kept in [archive lane 03](../archive/2026-07-29/lanes/03-cursor-cloud.md). Not carried forward: this folder is now about Claude Code sessions, and the first-party path costs no separate compute. |
+| **GitHub Actions as a session host** | **DROPPED** (2026-07-29) on policy, not capability. GitHub's hosted-runner terms forbid "any other activity unrelated to the production, testing, deployment, or publication of the software project associated with the repository", with a penalty ladder ending at account termination. Costing also failed independently (~$259/mo for 4×6h jobs/day). `anthropics/claude-code-action@v1` for *repo-scoped* automation remains fine. |
+| **A paid always-on Linux box** (Hetzner ~€16/mo, DigitalOcean ~$24/mo) | **BLOCKED** (2026-07-29) on Daniel's approval for recurring spend, and since made unnecessary. It was the only approach that closed the attach/steer/detach gap in July; **that gap is now closed for free** by cloud sessions plus web/mobile plus `--teleport`. Do not buy a box without re-confirming the remaining gap is real. The one thing still missing is *interactive terminal attach*, and that is a rollout gate, not something a VPS fixes. |
+| **`pmset disablesleep` to run lid-shut** | Still works and is still the only lever for keeping the *Mac itself* awake with the lid shut, but it is now the fallback rather than the plan. It is root-only, undocumented, global, persists across reboots, and Apple's thermal guidance is explicitly against sustained load under a closed lid. If the work can move to the cloud, move it. |
+| **Cursor cloud agents** | A different vendor's product, proven working in July 2026 against a different repo — its v0 API was exercised end-to-end, rate limit included. Not carried forward: this folder is now about Claude Code sessions, and the first-party path costs no separate compute. |
 
 ## Vercel Sandbox
 
@@ -74,8 +72,8 @@ the second, with root access, Docker, and a CLI/SDK (`sandbox create` / `run` / 
 mobile app, no web session list.
 
 To "host a session" on it you would install Claude Code inside the VM and drive it
-yourself. That is [lane 07](../archive/2026-07-29/lanes/07-always-on-vm-BLOCKED.md) — the
-always-on Linux box — rebuilt as pay-per-second instead of a monthly VPS bill.
+yourself. That is the always-on Linux box above — BLOCKED on recurring spend — rebuilt as
+pay-per-second instead of a monthly VPS bill.
 
 ### Why it does not fit the goal
 

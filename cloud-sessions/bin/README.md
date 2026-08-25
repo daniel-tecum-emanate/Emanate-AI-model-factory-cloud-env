@@ -36,9 +36,8 @@ install is broken.** `cs` derives its root from `BASH_SOURCE` without resolving 
 ([`cs:14-15`](cs)), so invoked *through* a symlink it computes `ROOT=~/.local`, looks for a
 ledger at `~/.local/state/sessions.jsonl`, and prints `no dispatches recorded` with **exit
 0** over a real ledger. An empty-but-fine answer where a populated one exists is exactly
-what ground rule 4 forbids. Measured in
-[`../reference/porting-audit-2026-08-17.md`](../archive/foreign-repo-provenance-2026-08-18/porting-audit-2026-08-17.md)
-(break 2). The wrapper `exec`s the real path, so `BASH_SOURCE` stays truthful. The
+what ground rule 4 forbids. Measured 2026-08-17, in a porting audit that reproduced this as
+one of its concrete breaks. The wrapper `exec`s the real path, so `BASH_SOURCE` stays truthful. The
 underlying resolution in `cs` is still unfixed — the wrapper is the workaround, not the fix.
 
 **And do not put `cloud-sessions/bin` on PATH at all.** It is tracked, agent-writable, and
@@ -94,9 +93,9 @@ There is **no `cs stop`**: Anthropic exposes no call that stops a running cloud 
 Wind one down with `cs send <id> "stop here and summarise what you did"`, then archive it
 from the web.
 
-Capability status per command — what has actually been run versus what is documented — is
-in [`../reference/verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md), and summarized in the
-table in [`../README.md`](../README.md). `claude remote-control` (server mode) **connects**;
+Capability status per command — what has actually been run versus what is only documented —
+is carried by each command's own row in this file and by the status tags in
+[`../playbooks/`](../playbooks/README.md). `claude remote-control` (server mode) **connects**;
 the `--remote-control` flag form that `cs rc` uses is `UNVERIFIED`, and the phone half is
 untested. Interactive terminal attach (`claude --cloud <id>`) is **not enabled for this
 account** and `cs` deliberately exposes no command for it.

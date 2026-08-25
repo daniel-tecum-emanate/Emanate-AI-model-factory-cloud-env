@@ -10,10 +10,9 @@
 > setup here rather than exercise real `heartbeat.py`/`worktree.py` logic, since there is no
 > such script to symlink to; the other sections (1–11, 16–17) are self-contained and
 > unaffected. `RESULTS.md`, which recorded a run including the three `atlas-os` companion
-> suites, moved to
-> [`../archive/foreign-repo-provenance-2026-08-18/RESULTS.md`](../archive/foreign-repo-provenance-2026-08-18/RESULTS.md) —
-> that specific run's numbers are the other repo's, not this one's. Re-run `run.sh` here to
-> get a fresh, real `RESULTS.md` for this repo.
+> suites, was archived and then removed from this repo — that specific run's numbers were
+> the other repo's, not this one's, so keeping them here would only invite miscitation.
+> Re-run `run.sh` here to get a fresh, real `RESULTS.md` for this repo.
 
 The regression suite for [`bin/cs`](../bin/cs). It exists because the ten defects an
 adversarial review found in `cs` on 2026-08-13 were, until now, only verified by a
@@ -287,13 +286,14 @@ checked without a real dispatch, and a real dispatch is not a test — it consum
 account's rate limits and runs an autonomous agent. Per
 [`../AGENT.md`](../AGENT.md): *do not dispatch a session to test the tooling.*
 
-- **That a dispatch actually creates a cloud session.** The stub prints the recorded output
-  shape from [`../reference/verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md); it does not
-  prove the real CLI still prints that shape. **If Anthropic changes the `View:` line, this
-  suite stays green and `cs start` silently stops recording ids.** That is the suite's
-  single biggest blind spot. It is checkable only by dispatching once by hand and comparing.
+- **That a dispatch actually creates a cloud session.** The stub prints an output shape
+  recorded from a real dispatch by hand; it does not prove the real CLI still prints that
+  shape. **If Anthropic changes the `View:` line, this suite stays green and `cs start`
+  silently stops recording ids.** That is the suite's single biggest blind spot. It is
+  checkable only by dispatching once by hand and comparing.
 - **That the cloud VM clones rather than bundles**, that a session can push a branch, or
-  that a routine fires. All of that is in `verified-facts.md`, verified by hand.
+  that a routine fires. None of that is covered here — each was established by hand-run
+  dispatches, and re-establishing any of them means dispatching for real again.
 - **Whether `--environment` with an `env_…` id does anything.** `cs` warns that this is
   `UNVERIFIED`; the suite asserts the warning, not the underlying behaviour.
 - **The real auth, `gh`, and browser paths.** `auth status`, `gh auth status` and `open` are

@@ -190,9 +190,9 @@ every step visible as a commit.
 **This is the anti-pattern for us, and it confirms an earlier call.** Building on CI means
 inheriting CI's job ceiling (~59 minutes; `UNVERIFIED` exact figure, but the *existence* of
 an inherited ceiling is the architectural point). GitHub can live with that because they own
-the runner terms and can split work across sessions. We cannot — which is why
-[archive lane 06](../archive/2026-07-29/lanes/06-github-actions-DROPPED.md) dropped Actions
-as a session host. That call was right for a reason beyond cost and terms of service.
+the runner terms and can split work across sessions. We cannot — which is why GitHub
+Actions was evaluated as a session host on 2026-07-29 and **DROPPED**. That call was right
+for a reason beyond cost and terms of service.
 
 **Their firewall is the best-expressed network policy surveyed.** Deny-by-default with a
 recommended allowlist covering OS package repos, container registries, language registries,
@@ -304,7 +304,7 @@ Cursor and Codex both treat the **PR as the product**. We had this backwards for
 before GitHub was connected, `cs start` was bundling, so the only way to retrieve work was
 `cs tp` — pulling the whole session down to a machine that has to be present. A branch is
 retrievable from anywhere by anyone, including a phone. Now that pushing works
-([verified 2026-08-12](verified-facts.md#4c-a-cloud-session-can-push-a-branch--verified)),
+(verified 2026-08-12),
 prompts should say *"open a PR"* by default and treat teleport as the exception.
 
 ### 2. Say the network posture out loud in the prompt
@@ -338,9 +338,8 @@ still not using it** (as of 2026-08-14) — there is no setup script on the Defa
 environment, so every session starts from the stock image. All seven cloud probes ran the
 proposed script's commands *by hand* for that reason, which is also how we know it costs
 ~19 seconds and is idempotent. If sessions in this repo ever need a toolchain that is not
-pre-installed, a setup script pays for itself immediately
-([`06-environments.md`](../playbooks/06-environments.md),
-[`this-repo-in-the-cloud.md`](this-repo-in-the-cloud.md#setup-script)).
+pre-installed, a setup script pays for itself immediately — see
+[`06-environments.md`](../playbooks/06-environments.md).
 
 ### 6. The one thing worth genuinely wanting: fork a session
 
@@ -378,8 +377,7 @@ as ground rule 7 — a skipped check is not a passed check — and both are mech
 than a matter of discipline.
 
 Our setup script is snapshotted after it runs, and a partial failure is easy to miss. Ending
-it with an explicit verification line is the cheapest available version of the same idea; see
-[`this-repo-in-the-cloud.md`](this-repo-in-the-cloud.md).
+it with an explicit verification line is the cheapest available version of the same idea.
 
 ### 10. Worth asking Anthropic for
 
@@ -412,4 +410,4 @@ gating and bookkeeping wrapper, nothing more.
 - [OpenAI — Codex cloud environments](https://learn.chatgpt.com/docs/environments/cloud-environment)
 - [OpenAI — Agent approvals & security](https://developers.openai.com/codex/agent-approvals-security)
 - [openai/codex-universal](https://github.com/openai/codex-universal)
-- Prior art already in this folder: [archive lane 03](../archive/2026-07-29/lanes/03-cursor-cloud.md) — Cursor's v0 API exercised end-to-end in July, including the rate limit that produced a real defect
+- Prior art: Cursor's v0 cloud-agent API was exercised end-to-end in July 2026, including the rate limit that produced a real defect (lane evaluation 2026-07-29, no longer carried in this repo)

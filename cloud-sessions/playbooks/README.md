@@ -29,5 +29,5 @@ before 12.
 
 Adding a new capability or workflow? It gets a new numbered file here **and** a row in
 [`../reference/surfaces.md`](../reference/surfaces.md). Claims made in a playbook still
-need their status tag and evidence in
-[`../reference/verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md).
+need their status tag (`VERIFIED` / `DOCS` / `UNVERIFIED`) and the evidence stated inline
+next to the claim — the date it was measured and the command or transcript that showed it.

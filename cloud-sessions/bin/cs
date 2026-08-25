@@ -63,7 +63,7 @@ require_claude() {
 # convenience index, and `cs ls` says so.
 # A cloud session's own hook telemetry is written to the VM's disk and dies with it, and
 # that is deliberate (committing it would turn an involuntary record into a cooperative
-# one - see reference/verified-facts.md). So THIS is the durable record of a cloud agent,
+# one, and truncated at the last commit). So THIS is the durable record of a cloud agent,
 # and it has to carry enough to be one: not just "a session existed" but where it came
 # from, what it was allowed to touch, and where its output will appear.
 #

@@ -328,20 +328,24 @@ origin was unaffected and its three behavioural checks passed.
 
 ## Where the evidence is
 
-- [`cloud-vm-probe-2026-08-14.md`](cloud-vm-probe-2026-08-14.md) — probe 1: the proxy
-  address, the `no_proxy` list, the three-host result table, the raw-socket 403 body, the
-  PPA warnings, and the `x-deny-reason` disproof.
-- [`cloud-vm-probe-2-2026-08-14.md`](cloud-vm-probe-2-2026-08-14.md) — probe 2:
-  independent re-confirmation on a second VM (different proxy port), the exact `curl`
-  swallow-the-body output, and setup-script idempotency with the same two PPA 403s.
-- [`cloud-vm-probe-7-2026-08-14.md`](cloud-vm-probe-7-2026-08-14.md) — the first PR opened
-  from a cloud VM, i.e. the GitHub path working end to end.
-- [`verified-facts.md`](verified-facts.md) — the authority on status; the network
-  correction lives there under the `x-deny-reason` disproof.
-- [`this-repo-in-the-cloud.md`](this-repo-in-the-cloud.md#network) — the per-repo answer:
-  **Trusted is sufficient for this repository**, because every one of its ~2000 hostnames
-  is a research citation in markdown, not a runtime call. The exception is live market
-  research, which needs Custom or Full.
+Everything above was measured on **2026-08-14** from inside real cloud VMs, across three
+probes. The probe write-ups themselves were dated evidence about a *different* repository
+and are no longer carried here (they remain in git history); what they established is
+stated inline in the tables above rather than cited. Specifically:
+
+- **Probe 1** established the proxy address, the `no_proxy` list, the three-host result
+  table, the raw-socket 403 body, the PPA warnings, and the `x-deny-reason` disproof.
+- **Probe 2** independently re-confirmed all of it on a second VM (with a different proxy
+  port), captured the exact `curl` swallow-the-body output, and showed setup-script
+  idempotency with the same two PPA 403s.
+- **Probe 7** opened the first PR from a cloud VM — the GitHub path working end to end.
+
+**Trusted is sufficient for this repository.** Its outbound needs are GitHub, package
+registries, and the Supabase/Trigger.dev relay endpoints the pipeline calls; there is no
+scraping or arbitrary-SaaS traffic in the S1→S10 path. If a call does get refused, the 403
+body names the host — add that host to a **Custom** environment rather than switching to
+**Full**.
+
 - [`limits.md`](limits.md) and [`../playbooks/06-environments.md`](../playbooks/06-environments.md)
   — the surrounding quota and environment-configuration context.
 

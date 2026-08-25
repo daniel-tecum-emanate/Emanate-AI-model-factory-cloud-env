@@ -195,8 +195,9 @@ startup now.
 **The cloud session finished, but there is no telemetry from it**
 Working as intended. Hooks do fire in cloud sessions, but they write to
 `atlas-os/telemetry/raw/`, which is gitignored and lives on a VM that gets reclaimed. A
-session is **told not to** commit its own trace, for reasons worth reading:
-[`verified-facts.md`](verified-facts.md#the-first-fix-was-wrong-and-was-reverted-the-same-hour--superseded-2026-08-14).
+session is **told not to** commit its own trace: that fix shipped on 2026-08-14 and was
+reverted the same hour, because a self-committed record is cooperative rather than
+involuntary, and is silently truncated at the last commit.
 What survives is the dispatch row in `state/sessions.jsonl` and the branch or PR.
 
 ## When nothing above fits

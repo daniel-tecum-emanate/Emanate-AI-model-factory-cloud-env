@@ -24,19 +24,19 @@ they supersede that table.
 Local sessions **auto-register** on the heartbeat board through a
 SessionStart/UserPromptSubmit hook — presence is physics, not protocol, keyed on
 `$CLAUDE_CODE_SESSION_ID` because the liveness oracle
-[matches ids, not lane names](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#why-lanes-go-stale-while-actively-working--verified-2026-08-14).
+matches ids, not lane names.
 A session that then **claims real paths** (`--owns`) becomes partitionable, because the
 board [refuses overlapping claims](../../atlas-os/heartbeat/README.md#claim-syntax).
 `cs board` shows all of it on one screen. `cs exodus` splits the shared dirty tree **by
 those claims** into per-lane branches, and writes a dispatch MANIFEST — it
 does not dispatch, because the routines API is reachable only from inside a session
-([dispatch is TTY-gated](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#2-dispatch-requires-a-tty--verified-and-it-matters);
-[routines are the headless path](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#4b-routines-fire-and-clone--verified)).
+(dispatch is TTY-gated;
+routines are the headless path).
 `/cloud all` consumes the manifest: per unit it writes the lane's brief and commits it to
 the unit's branch (exodus ships only a placeholder path — the manifest says so itself),
 then dispatches the unit as a one-off routine, create → run → **disable**. `/cloud workflow <file>` is the deeper move: one cloud
 coordinator reads a workflow file and fans out with subagents *in the cloud* —
-[cloud subagents run concurrently and are ledger-logged under their own session ids, `VERIFIED 2026-08-16`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#subagents-work-inside-a-cloud-session--verified-2026-08-16)
+cloud subagents run concurrently and are ledger-logged under their own session ids, `VERIFIED 2026-08-16`
 — so the orchestrator itself leaves the laptop too.
 
 ```
@@ -178,11 +178,11 @@ cs board                    # 5. confirm the ledger rows landed; close the lid
   unit is create → run → **disable** before the next starts, and each gets a
   `cs track` row with full provenance (`--lane --owns --from --brief --trigger
   --expect-branch`) because
-  [the VM's own telemetry dies with the VM — the dispatch ledger is the record](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#cloud-sessions-are-logged--but-the-record-dies-with-the-vm--verified-2026-08-14).
+  the VM's own telemetry dies with the VM — the dispatch ledger is the record.
 - **Whole workflow, orchestrator included:** `/cloud workflow <file>` dispatches one
   coordinator session that reads the workflow file (convention: `docs/workflows/`) and
   fans out in the cloud —
-  [subagent fan-out in a VM is `VERIFIED 2026-08-16`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#subagents-work-inside-a-cloud-session--verified-2026-08-16).
+  subagent fan-out in a VM is `VERIFIED 2026-08-16`.
   Use it when the units are one workflow's stages rather than independent lanes.
 - Results come back as `claude/<lane>` branches and PRs. Steer with `cs send`, retrieve
   with `cs tp` ([03](03-steer-and-return.md)), and re-run the suites after each merge.
@@ -194,28 +194,28 @@ cs board                    # 5. confirm the ledger rows landed; close the lid
 | Exodus reports `CONFLICT` — two rows' claims overlap a dirty path | Treat it as a stop, like [`/cloud` step 3b](../../.claude/commands/cloud.md#steps) says: narrow one lane's claim (`heartbeat.py overlap` to test, then `update`), or ship one lane and hold the other until it merges |
 | Exodus reports `UNCLAIMED` files | Assign them to a lane's claim, or leave them local. Never wave them through by default — that is the one gate with a human in it on purpose |
 | A routine is still armed after dispatch (`enabled: true`) | Run `/routines-audit`. Firing does not consume `run_once_at` and a disabled routine still shows a future `next_run_at` — **`enabled` is the deciding field** ([`../AGENT.md`](../AGENT.md)). Nine were once left armed in a single day |
-| Board shows `STALE` for a session that is visibly working | The row's name does not match what the oracle sees — [ids, not names, `V-021`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#why-lanes-go-stale-while-actively-working--verified-2026-08-14). The hook keys rows on `$CLAUDE_CODE_SESSION_ID` for exactly this reason; a hand-registered lane name goes stale by construction |
+| Board shows `STALE` for a session that is visibly working | The row's name does not match what the oracle sees — ids, not names, `V-021`. The hook keys rows on `$CLAUDE_CODE_SESSION_ID` for exactly this reason; a hand-registered lane name goes stale by construction |
 | Triage says `0 mechanically movable` | Read the verdicts before concluding anything — the 2026-08-15 shared-tree case above. The durable fix is per-lane worktrees ([`worktree.py`](../../atlas-os/bin/worktree.py)) *before* work starts, plus real claims; not a forced dispatch now |
 | `cs tp` refuses to bring a session home | Dirty local tree — it will not stash behind your back. Commit or clean, then retry ([03](03-steer-and-return.md#bringing-it-home)) |
 
 Standing safety, unchanged by any of this: pass an explicit `mcp_connections` list on
 every routine —
-[they inherit every connected connector otherwise](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#4d-every-connected-claudeai-connector-is-attached-to-a-routine-by-default--verified)
+they inherit every connected connector otherwise
 — and never put a repo directory on PATH, for
-[the reason measured 2026-08-15](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#a-cloud-session-could-have-run-code-on-this-mac--disproven-fixed-2026-08-15).
+the reason measured 2026-08-15.
 
 ## Status, honestly
 
-As of this file's writing (2026-08-17). A row here is a claim about *that day*; the tests
-lane's results and [`verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md) supersede it.
+As of this file's writing (2026-08-17). A row here is a claim about *that day*; a later
+run of [`../tests/run.sh`](../tests/README.md) supersedes it.
 
 | Piece | Status |
 |---|---|
-| Routine dispatch chain (create → run → disable), headless | **`VERIFIED`** — [4b](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#4b-routines-fire-and-clone--verified), and every probe was dispatched this way |
-| Subagent fan-out inside a cloud VM, concurrent, ledger-logged | **`VERIFIED 2026-08-16`** — [evidence](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#subagents-work-inside-a-cloud-session--verified-2026-08-16) |
-| Heartbeat board refuses overlapping claims; liveness keys on session id | **`VERIFIED`** — [board contract](../../atlas-os/heartbeat/README.md), [V-021](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md#why-lanes-go-stale-while-actively-working--verified-2026-08-14) |
+| Routine dispatch chain (create → run → disable), headless | **`VERIFIED`** — 4b, and every probe was dispatched this way |
+| Subagent fan-out inside a cloud VM, concurrent, ledger-logged | **`VERIFIED 2026-08-16`** — evidence |
+| Heartbeat board refuses overlapping claims; liveness keys on session id | **`VERIFIED`** — [board contract](../../atlas-os/heartbeat/README.md), V-021 |
 | The shared-tree blocker the partition answers | **`VERIFIED 2026-08-15`** — [recorded in `/cloud`](../../.claude/commands/cloud.md#steps) |
-| Auto-register hook (behaviour, and its timing targets) | **staged for a human** — wiring in [`bin/hooks/WIRING.md`](../bin/hooks/WIRING.md), not applied. Offline suite green 2026-08-17, warm path ~60ms sandboxed ([`tests/RESULTS.md`](../archive/foreign-repo-provenance-2026-08-18/RESULTS.md) (archived — the other repo's run)); behaviour under a real wired hook `UNVERIFIED` until Daniel applies it |
+| Auto-register hook (behaviour, and its timing targets) | **staged for a human** — wiring in [`bin/hooks/WIRING.md`](../bin/hooks/WIRING.md), not applied. Offline suite green 2026-08-17, warm path ~60ms sandboxed (measured in a run against a different repo, so treat the timing as indicative only); behaviour under a real wired hook `UNVERIFIED` until Daniel applies it |
 | `cs board` | **`VERIFIED` 2026-08-17** — run on this repo, all four sources `ok`, exit 0; suite §12 covers the degraded modes |
 | `cs exodus` (partition correctness, branch/manifest output) | **dry-run `VERIFIED` 2026-08-17** on this repo (partition listed, exit 0, nothing written); execute exercised only in the sandboxed suite (§14) — a real-origin execute is `UNVERIFIED` |
 | `/cloud all` manifest consumption | **`UNVERIFIED`** — built this wave; the dispatch chain under it is `VERIFIED` |

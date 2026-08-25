@@ -413,15 +413,18 @@ entry) rather than trusting your own belief that the write happened.
 
 **Why, concretely, not just "because the rule says so":** cloud environments have no
 secrets store — any value in an environment variable or setup script is readable by anyone
-who uses that environment (`06-environments.md`: "There is no secrets store"). This exact
-folder's own research already confirmed and recorded this as a standing constraint: F15 in
-[`../archive/foreign-repo-provenance-2026-08-18/founder-decisions-2026-08-18.md`](../archive/foreign-repo-provenance-2026-08-18/founder-decisions-2026-08-18.md)
-("No secrets store, no telemetry persistence in cloud VMs" — group 3, credentialed cloud
-work) and `AGENT.md`'s own "Constraints that will bite you" list ("Cloud environments have
-no secrets store... keep credentialed work out of cloud sessions entirely"). `PRD.md`'s own
-architecture decision (Daniel, 2026-08-18) put the *one* Fireworks credential in Trigger.dev
-specifically so this exact agent never needs it — "do not revisit it without asking again"
-(`PRContext-phase2.md`).
+who uses that environment, and a shared environment pushes those values into every member's
+sessions. That is not an inference; it is measured behaviour of the platform, recorded in
+[`06-environments.md`](06-environments.md)'s "Environment variables" section ("**There is no
+secrets store.** Values are readable by anyone who uses the environment... Do not put API
+keys here"). It was independently ratified as a standing founder-level constraint on
+2026-08-18 — "no secrets store, no telemetry persistence in cloud VMs," covering all
+credentialed cloud work — and restated in [`../AGENT.md`](../AGENT.md)'s "Constraints that
+will bite you" list ("Cloud environments have no secrets store... keep credentialed work out
+of cloud sessions entirely"). Read either of those two files if you want the rule in its
+own words; they are both still in this repo. `PRD.md`'s architecture decision (Daniel,
+2026-08-18) put the *one* Fireworks credential in Trigger.dev specifically so this exact
+agent never needs it — "do not revisit it without asking again" (`PRContext-phase2.md`).
 
 **A second, equally real credential this pipeline touches that the task brief didn't name,
 found by reading the code rather than assumed:** `factory.py`'s optional Supabase sync path

@@ -3,8 +3,9 @@
 > **Provenance note, 2026-08-18:** `sessions.jsonl` and `exodus-manifest.json` previously
 > held real rows/data, but every one of them was from a dispatch or partition run against a
 > **different repository**, `daniel0tgc/internal-company-tool`, bulk-committed into this
-> repo by mistake in commit `7a5690b`. That content moved, unedited, to
-> [`../archive/foreign-repo-provenance-2026-08-18/`](../archive/foreign-repo-provenance-2026-08-18/README.md).
+> repo by mistake in commit `7a5690b`. That content was archived out of this folder and has
+> since been removed from this repo entirely — it belonged to another initiative, not to the
+> fine-tuning harness. It remains recoverable from git history if ever needed.
 > `sessions.jsonl` was truncated to empty here (`: > cloud-sessions/state/sessions.jsonl`,
 > per [`../playbooks/09-porting-to-another-repo.md`](../playbooks/09-porting-to-another-repo.md)
 > step 2) so `cs ls`/`cs board`/`cs fleet` read a real, empty ledger for
@@ -57,10 +58,10 @@ sessions started on the web or the phone do not appear here unless someone ran `
 **Tracked on purpose since 2026-08-14.** It was gitignored as ordinary runtime state until
 measuring cloud sessions showed it is the *only* record of a dispatched session that
 survives: a cloud session's own hook telemetry is written to the VM's disk and discarded
-when the VM is reclaimed, and it deliberately does not commit that trace (per the now-archived
-[`verified-facts.md`](../archive/foreign-repo-provenance-2026-08-18/verified-facts.md), written
-against the other repo but describing a mechanism-level fact that still holds here). So the
-dispatch-side row here, plus the branch or PR the session produces, *is* the record.
+when the VM is reclaimed, and it deliberately does not commit that trace. That was measured
+2026-08-14 against a real cloud VM; it is a mechanism-level fact about the platform, not
+something specific to any one repo. So the dispatch-side row here, plus the branch or PR
+the session produces, *is* the record.
 
 *Superseded 2026-08-17:* an earlier paragraph here said the ledger was ignored and
 untracked. It is not — `git ls-files` lists it and `git check-ignore` exits 1. The stale

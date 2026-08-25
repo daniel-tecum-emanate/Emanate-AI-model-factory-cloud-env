@@ -63,9 +63,8 @@ cs start --env <environment-id> "…"
 Blocked requests fail with a `403` whose plain-text body reads `request blocked: no rule
 or allowlist entry allows host "..."`. Worth remembering, because otherwise it looks like
 the remote service is down — and a plain `curl` **hides** that body on a CONNECT tunnel
-failure, so the block can present as a hang. Measured 2026-08-14
-([probe](../archive/foreign-repo-provenance-2026-08-18/cloud-vm-probe-2026-08-14.md)); the `x-deny-reason` header this
-folder previously claimed does not exist.
+failure, so the block can present as a hang. Measured directly against a cloud VM on
+2026-08-14; the `x-deny-reason` header this folder previously claimed does not exist.
 
 **"Trusted" is not "has internet."** It is an allowlist: package registries, GitHub, cloud
 SDKs. A session that needs to call your own API, scrape a page, or reach a SaaS endpoint
