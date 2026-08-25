@@ -1,0 +1,45 @@
+{
+  "beats": 1,
+  "blocker": {
+    "detail": "not yet a real blocker; env check passed",
+    "kind": "dependency-missing",
+    "needs": "",
+    "restated_at": "2026-08-25T06:00:03Z",
+    "since": "2026-08-25T06:00:03Z"
+  },
+  "emitter": {
+    "name": "cloud-heartbeat.sh",
+    "version": 1
+  },
+  "ended_at": null,
+  "failure": null,
+  "git": {
+    "branch": "claude/determined-sagan-q3ev8o",
+    "head": "9eb1621"
+  },
+  "history": [
+    {
+      "detail": "not yet a real blocker; env check passed",
+      "kind": "dependency-missing",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T06:00:03Z",
+      "verb": "blocked"
+    }
+  ],
+  "host": {
+    "hostname": "vm",
+    "os": "Linux 6.18.44-fc-v21 x86_64",
+    "user": "root"
+  },
+  "kind": "cloud-heartbeat",
+  "lane": "4bc0defc-43c6-51f0-a55a-5f5ce3c5e8fe",
+  "last_verb": "blocked",
+  "note": "checking",
+  "phase": "",
+  "progress": null,
+  "schema": 1,
+  "session_id": "4bc0defc-43c6-51f0-a55a-5f5ce3c5e8fe",
+  "started_at": "2026-08-25T06:00:03Z",
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T06:00:03Z"
+}
