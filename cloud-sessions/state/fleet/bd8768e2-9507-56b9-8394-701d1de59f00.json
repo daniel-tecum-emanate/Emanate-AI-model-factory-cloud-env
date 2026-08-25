@@ -1,5 +1,5 @@
 {
-  "beats": 2,
+  "beats": 3,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -21,6 +21,12 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:12Z",
       "verb": "beat"
+    },
+    {
+      "phase": "relay_claim_code present but app_base_url absent from fire payload - cannot perform sync exchange; proceeding without DB sync per step 2 fallback",
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:20Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -32,11 +38,11 @@
   "lane": "finetune-grand-steel",
   "last_verb": "beat",
   "note": "confirmed fine-tuning/factory-product/factory.py present at repo root (dedicated cloud-env repo, main branch, no checkout needed); read playbook 11 and ENVIRONMENT.md in full",
-  "phase": "",
+  "phase": "relay_claim_code present but app_base_url absent from fire payload - cannot perform sync exchange; proceeding without DB sync per step 2 fallback",
   "progress": null,
   "schema": 1,
   "session_id": "bd8768e2-9507-56b9-8394-701d1de59f00",
   "started_at": "2026-08-25T05:59:04Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:12Z"
+  "updated_at": "2026-08-25T05:59:20Z"
 }
