@@ -1,6 +1,12 @@
 {
-  "beats": 2,
-  "blocker": null,
+  "beats": 3,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and live by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd (stage=launch, blocked on S6g launch gate: projected cost $48.18 vs cap $50, stop-gate $100, awaiting Daniel's approval per 07-launch-report.json)",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run",
+    "restated_at": "2026-08-25T05:59:51Z",
+    "since": "2026-08-25T05:59:51Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -22,6 +28,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:38Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and live by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd (stage=launch, blocked on S6g launch gate: projected cost $48.18 vs cap $50, stop-gate $100, awaitin",
+      "kind": "needs-human-action",
+      "phase": "running without DB sync - fire payload had relay_claim_code but no app_base_url, cannot perform sync exchange",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T05:59:51Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -31,13 +45,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "orchestrating grand-steel fine-tune pipeline; verified pwd and factory.py present at fine-tuning/factory-product/factory.py",
   "phase": "running without DB sync - fire payload had relay_claim_code but no app_base_url, cannot perform sync exchange",
   "progress": null,
   "schema": 1,
   "session_id": "b66a0bb3-faef-532e-9cc5-04fe3f24dcb5",
   "started_at": "2026-08-25T05:59:20Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:38Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T05:59:51Z"
 }
