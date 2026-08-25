@@ -1,0 +1,37 @@
+{
+  "beats": 1,
+  "blocker": null,
+  "emitter": {
+    "name": "cloud-heartbeat.sh",
+    "version": 1
+  },
+  "ended_at": null,
+  "failure": null,
+  "git": {
+    "branch": "claude/determined-sagan-jn312a",
+    "head": "9eb1621"
+  },
+  "history": [
+    {
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:03Z",
+      "verb": "beat"
+    }
+  ],
+  "host": {
+    "hostname": "vm",
+    "os": "Linux 6.18.44-fc-v21 x86_64",
+    "user": "root"
+  },
+  "kind": "cloud-heartbeat",
+  "lane": "74f233cd-eb61-5427-b0fe-f509391e3334",
+  "last_verb": "beat",
+  "note": "confirmed fine-tuning/factory-product/factory.py present at repo root",
+  "phase": "",
+  "progress": null,
+  "schema": 1,
+  "session_id": "74f233cd-eb61-5427-b0fe-f509391e3334",
+  "started_at": "2026-08-25T05:59:03Z",
+  "status": "ACTIVE",
+  "updated_at": "2026-08-25T05:59:03Z"
+}
