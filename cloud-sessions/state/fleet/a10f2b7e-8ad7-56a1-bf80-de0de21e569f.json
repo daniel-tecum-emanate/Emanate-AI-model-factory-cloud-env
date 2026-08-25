@@ -1,5 +1,5 @@
 {
-  "beats": 3,
+  "beats": 4,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -26,6 +26,12 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T06:00:16Z",
       "verb": "beat"
+    },
+    {
+      "phase": "running without DB sync - fire payload carries relay_claim_code but no app_base_url, cannot construct exchange call without guessing the URL",
+      "status": "ACTIVE",
+      "ts": "2026-08-25T06:00:27Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -37,11 +43,11 @@
   "lane": "finetune-grand-steel",
   "last_verb": "beat",
   "note": "read playbook 11 + ENVIRONMENT.md in full; proceeding to relay claim exchange",
-  "phase": "",
+  "phase": "running without DB sync - fire payload carries relay_claim_code but no app_base_url, cannot construct exchange call without guessing the URL",
   "progress": null,
   "schema": 1,
   "session_id": "a10f2b7e-8ad7-56a1-bf80-de0de21e569f",
   "started_at": "2026-08-25T06:00:07Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T06:00:16Z"
+  "updated_at": "2026-08-25T06:00:27Z"
 }
