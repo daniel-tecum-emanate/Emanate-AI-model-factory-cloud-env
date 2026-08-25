@@ -4,7 +4,7 @@
 > (`daniel0tgc/internal-company-tool`) — mechanism-level content stands (the fleet
 > mechanism itself is genuinely usable here). Its `atlas-os/heartbeat/STATE.md`
 > reference does not exist in this repo (`emanate-tecum-workflow`); this repo's own
-> heartbeat board is [`../../coordination/heartbeat/STATE.md`](../../coordination/heartbeat/STATE.md),
+> heartbeat board is `coordination/heartbeat/STATE.md` (in `emanate-tecum-workflow`, not this repo),
 > a different, unconnected system — the fleet mechanism (`cloud-fleet/*` refs, `cs fleet`)
 > does not depend on either board.
 

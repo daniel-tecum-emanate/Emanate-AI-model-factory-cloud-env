@@ -51,10 +51,12 @@ a subfolder. If you need a new document, it belongs in `playbooks/` (how to do a
 | `tests/` | `run.sh`, the regression suite for `bin/cs`, and its `RESULTS.md` log | $0 and offline by construction — it stubs `claude`, `gh` and `open`, and never dispatches. Run it after any change to `cs` |
 | `state/` | `sessions.jsonl` (the dispatch ledger, **tracked on purpose** since 2026-08-14), `exodus-manifest.json`, and `fleet/` — the cloud agents' own heartbeat files | runtime data, append-only, **never hand-edited**. `cs rm` removes a ledger row; `cs fleet --prune` is the only thing that deletes a heartbeat. See [`state/README.md`](state/README.md) |
 
-One surface lives outside this folder and depends on it: the `/cloud` slash command at
-[`../.claude/commands/cloud.md`](../.claude/commands/cloud.md), which walks a session
-through preparing a handoff. It names `cs doctor`, `cs new --cloud --plan` and this
-folder's playbooks, so a change to `cs`'s interface can leave it stale.
+One surface depends on this folder but **does not exist in this repo**: the `/cloud` slash
+command (`.claude/commands/cloud.md`), which walks a session through preparing a handoff. It
+lives in `emanate-tecum-workflow` and was not part of the fine-tuning-harness import, so
+there is nothing here to open. It names `cs doctor`, `cs new --cloud --plan` and this
+folder's playbooks, so a change to `cs`'s interface can leave it stale — fix it over there,
+not here.
 
 ## Ground rules
 
@@ -165,14 +167,18 @@ same session that made them.
 - Changed `bin/cs` → run `bash cloud-sessions/tests/run.sh` (it costs nothing and
   dispatches nothing), then `cs doctor` on the real machine, because the suite stubs
   `claude`, `gh` and `open` and cannot tell you what the real ones answer. Update
-  [`bin/README.md`](bin/README.md), the command block in [`README.md`](README.md) and
-  [`../.claude/commands/cloud.md`](../.claude/commands/cloud.md) if the interface moved.
+  [`bin/README.md`](bin/README.md) and the command block in [`README.md`](README.md) if the
+  interface moved. (The `/cloud` slash command also names that interface, but it lives in
+  `emanate-tecum-workflow` and is not in this repo — see the layout section above.)
 - New probe report → a row in [`reference/README.md`](reference/README.md), and fold its
   findings into the `reference/` or playbook file the finding is actually about. A report is
   not a status; leaving it as the only home for a finding means the next reader has to diff
   seven files to learn the current answer.
-- Anything superseded in the archive → leave the archive alone and note the correction in
-  `reference/`.
+- Anything superseded → correct it in place in the `reference/` or playbook file that
+  carries it, and say what changed and when. There is no `archive/` in this repo — the
+  2026-08-24 harness trim removed it (it held foreign-repo provenance and the superseded
+  keep-the-laptop-awake research record). Superseded material goes to git history, not to a
+  folder.
 
 ## Current state, one line
 

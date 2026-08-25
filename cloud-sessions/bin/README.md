@@ -170,7 +170,8 @@ Runs **on the VM**, called by the agent itself, immediately before its first
 `cloud-heartbeat.sh start`. Answers a different question than the heartbeat: not "is this
 session alive?" but "is this `(org_slug, model_stream)` already being worked, by whom, at
 what stage, and is that claim still good?" Design:
-[`PRs/model-factory-cloud-environment-v1/04-multi-session-coordination-design.md`](../../PRs/model-factory-cloud-environment-v1/04-multi-session-coordination-design.md).
+`PRs/model-factory-cloud-environment-v1/04-multi-session-coordination-design.md`
+(in `emanate-tecum-workflow`, not this repo).
 
 ```
 cloud-claim.sh check   --org <slug> [--stream per-account|intelligence]

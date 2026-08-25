@@ -14,6 +14,26 @@
 > the other repo's, not this one's, so keeping them here would only invite miscitation.
 > Re-run `run.sh` here to get a fresh, real `RESULTS.md` for this repo.
 
+> **Measured baseline in THIS repo, 2026-08-24 (post-trim verification).** `run.sh` exits
+> **1**, not 0, and that is the expected state — do not read it as a broken harness:
+>
+> ```
+> 533 passed  27 failed  0 xfail  3 skipped
+> 107 additional checks never ran at all (collapsed into the skip lines — see G24)
+> ```
+>
+> The 27 failures are entirely `cmd/*` (14), `wf/*` (9) and `tmpl/*` (4). Every one asserts
+> `.claude/commands/cloud.md` or a workflow template — surfaces that live in
+> `emanate-tecum-workflow` and are deliberately not part of this cloud environment. The
+> 107 never-run checks are sections 12–15, gated on the absent `atlas-os` fixture above.
+>
+> **What matters for a fine-tune run is green:** all 18 `fleet/*` checks pass, which is
+> section 20 — `cloud-heartbeat.sh`, the only telemetry channel the dispatch routine has.
+> `cloud-claim.sh` (per-org mutual exclusion, the other hard requirement) is not covered by
+> this suite at all; it is exercised by section 19's `cs claim` checks only at the board
+> level. Treat "533/27 with fleet green" as the pass condition here, and compare against
+> that number rather than against exit 0.
+
 The regression suite for [`bin/cs`](../bin/cs). It exists because the ten defects an
 adversarial review found in `cs` on 2026-08-13 were, until now, only verified by a
 throwaway script in a temp directory. A fix nobody re-runs is a fix that comes back.
@@ -47,7 +67,7 @@ construction rather than by care:
 | `gh auth status` (a network call) | [`fixtures/fake-gh`](fixtures/fake-gh) |
 | `open` (launches a browser) | [`fixtures/fake-open`](fixtures/fake-open), which records the URL so tests can assert it |
 | a human at the `cs new` prompt | [`fixtures/pty-drive.py`](fixtures/pty-drive.py) — runs the command on a real pty and types the answer once the prompt has actually appeared |
-| the real heartbeat board `atlas-os/heartbeat/STATE.md` | throwaway **symlinked roots** per [`atlas-os/tests/heartbeat/README.md`](../../atlas-os/tests/heartbeat/README.md): the real `heartbeat.py`/`worktree.py` are symlinked into a fixture repo and resolve their board relative to their own (unresolved) path, so the real scripts run against a sandbox board |
+| the real heartbeat board `atlas-os/heartbeat/STATE.md` | throwaway **symlinked roots** per `atlas-os/tests/heartbeat/README.md` (foreign repo, not here): the real `heartbeat.py`/`worktree.py` are symlinked into a fixture repo and resolve their board relative to their own (unresolved) path, so the real scripts run against a sandbox board |
 | `claude agents --json` (what `cs sessions`, and through it `cs board`, shells out to) | an `agents-claude` stub generated into the sandbox that answers that one verb with a fixed session list — `fake-claude` deliberately does *not* speak it, which is what drives the degraded-sessions checks |
 
 No test dispatches a cloud session, consumes a rate limit, or makes a network request.
@@ -171,7 +191,7 @@ rewrite — even one that would have preserved every row — changes the bytes.
 
 `cs board` and `cs exodus` read the heartbeat board, and `heartbeat.py --board`
 **isolates nothing** — the real lock and the real board are always consulted
-([`atlas-os/tests/heartbeat/README.md`](../../atlas-os/tests/heartbeat/README.md)). So
+(`atlas-os/tests/heartbeat/README.md` (foreign repo, not here)). So
 every fixture here is a throwaway repo with `atlas-os/bin/heartbeat.py` and
 `worktree.py` symlinked to the real scripts: `os.path.abspath()` does not resolve
 symlinks, so the real, unmodified code runs against a sandbox board, and section 17

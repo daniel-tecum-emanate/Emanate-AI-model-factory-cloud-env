@@ -68,6 +68,22 @@ trimmed. Concretely, all of the following stay regardless of current wiring:
 If you are trimming this repo again later: cutting something because it is
 eval-shaped and currently unreferenced is the specific mistake to avoid.
 
+**Known first thing to widen when eval work starts** (found by the 2026-08-24
+post-trim verification, recorded here rather than changed, because it is a
+data-egress decision and every key in that allow-list carries a written PII
+review): `factory_sync.SAFE_REPORT_KEYS` does **not** include `heldout_anchor`,
+`judge_generator_separation`, `nodes` or `window_contract`. `stage_eval` produces
+the sealed/unsealed held-out anchor and the judge/generator separation block, but
+because those keys are not allow-listed they are stripped before sync — they exist
+only in the on-disk `09-eval-report.json` and never reach Supabase or the Model
+Factory tab. Any work on "make eval results visible in the product" starts there.
+
+Related, and also left as-is: the committed `runs/qa-dryrun-synth/09-eval-report.json`
+fixture is a `BLOCKED_ON_GATE` snapshot with `nodes: []` and no `heldout_anchor`, so
+it does not exercise the real S8 payload shape and nothing currently
+regression-guards it. A fixture captured from a real S8 dry-run would be a better
+target once eval work begins.
+
 ## What deliberately is NOT here, and must not be added
 
 This is not tidiness — each of these would break something or cost real money.
@@ -88,6 +104,38 @@ This is not tidiness — each of these would break something or cost real money.
 - **Large run artifacts.** `runs/ptc-steel` (810MB) and `runs/grand-steel` (21MB)
   stay out. Re-importing them recreates the exact problem this repo escaped; the
   root `.gitignore` enforces it.
+
+## Verifying this environment (and what "skipped" means here)
+
+Two suites, both $0 and offline:
+
+```bash
+cd fine-tuning/factory-product && python3 -m pytest tests/ -q   # 1096 passed, 26 skipped
+bash cloud-sessions/tests/run.sh                                # regression suite for bin/cs
+```
+
+**Read the skip reasons, not just the count.** Every skip in the pytest suite is
+conditional on a file being genuinely absent and states which file and why, so on
+the operator's machine (where those files exist) the same tests run for real. Run
+`pytest tests/ -q -rs` to print them. They fall into three groups:
+
+| Count | Guarded on | Why it is not a defect here |
+|---|---|---|
+| 15 | a `platform-alpha` checkout | pre-existing schema-drift guard; the migration file it diffs against is in another repo |
+| 8 | `company-brain/3-execution/*.md` | `lessons_sync`'s canon parse is a maintenance job. The pipeline only calls `attribute_lesson_to_run()`, a DB update that reads neither file |
+| 1 | `scripts/factory_agents_sync.sh` | workflow-layer scheduling; a cloud run drives stages through `factory.py` directly |
+| 1 | `cursor_guard` | deliberately absent (V-364) — see the section above |
+| 1 | `WORKFLOW_ROOT` identity | the test hardcodes an `emanate-tecum-workflow` path and asserts the redactor treats it as repo-*internal*. Here it is genuinely external, so redacting it is correct |
+
+None of these are on the pipeline path (S1→S10). If you add one of those files to
+this repo, the corresponding tests un-skip automatically — the guards are absence
+checks, not permanent opt-outs.
+
+Before 2026-08-24, `pytest tests/` ran **zero** tests: `test_cursor_dispatch.py`
+imports `factory_cursor_dispatch`, which imports the deliberately-absent
+`cursor_guard` at module scope, and a collection error aborts the entire run.
+`tests/conftest.py` now `collect_ignore`s that one module when `cursor_guard` is
+unimportable. Do not resolve it by adding `cursor_guard.py`.
 
 ## Where the rest of the system lives
 

@@ -46,7 +46,7 @@ its actual train/eval/activate happen as session-driven manual work living in `r
 `factory.py`. For the full story of how that gap played out on a real, paid training job — including
 a near-miss where a training spend was approved before anyone confirmed the launch mechanism
 existed as working code — read
-[`../lessons/model-factory/`](../lessons/model-factory/AGENTS.md), this product's parallel narrative
+`fine-tuning/lessons/model-factory/` (in `emanate-tecum-workflow`, not this repo), this product's parallel narrative
 history. That folder documents the *story*; this folder is the *code and the data* the story is about.
 
 ## The 2026-08-14 catalog/graph/A-B initiative (three connected PRs)

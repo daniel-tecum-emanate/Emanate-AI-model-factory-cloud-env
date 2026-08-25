@@ -13,9 +13,34 @@ author should not have to know that the code under test writes to a ledger in
 order to avoid polluting it.
 """
 
+import importlib.util
 import os
+import sys
+from pathlib import Path
 
 import pytest
+
+# V-364: `scripts/lib/cursor_guard.py` and `scripts/tier2_run.sh` are DELIBERATELY
+# absent from this cloud environment — they resolve a local `claude` CLI backed by a
+# machine's own Anthropic auth, which this environment is structurally barred from
+# holding. Do NOT "fix" this by adding cursor_guard.py.
+#
+# The side effect is that `test_cursor_dispatch.py` imports `factory_cursor_dispatch`,
+# which does a module-level `import cursor_guard`, so pytest raises during COLLECTION.
+# Collection errors abort the whole run: before this hook, `pytest tests/` executed
+# ZERO of the ~1100 tests here and printed "Interrupted: 1 error during collection",
+# which reads like a broken suite rather than one intentionally-unavailable module.
+#
+# So skip that one module when — and only when — cursor_guard is genuinely unimportable.
+# Where it IS present (the operator's machine) the module collects and runs as before,
+# so this cannot silently hide a real regression in cursor dispatch.
+_SCRIPTS_LIB = Path(__file__).resolve().parents[3] / "scripts" / "lib"
+if str(_SCRIPTS_LIB) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_LIB))
+
+collect_ignore = []
+if importlib.util.find_spec("cursor_guard") is None:
+    collect_ignore.append("test_cursor_dispatch.py")
 
 
 @pytest.fixture(scope="session", autouse=True)

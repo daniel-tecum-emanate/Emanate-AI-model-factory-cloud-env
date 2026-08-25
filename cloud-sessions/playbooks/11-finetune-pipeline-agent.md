@@ -15,18 +15,27 @@ The new repo's `main` branch carries a clean copy of `fine-tuning/factory-produc
 `cloud-sessions/` at its root — no branch-switching step is needed there at all.
 
 **For the actual current dispatch prompt, read the live routine, not §8 below** — it has
-diverged. **For the real root-cause story and what's proven working end-to-end (S1-S6, correct
-S6g gate deference, live on a real cloud VM), read
-[`PRs/model-factory-cloud-dispatch-v1/RUN-LOG.md`](../../PRs/model-factory-cloud-dispatch-v1/RUN-LOG.md)
-and
-[`handoffs/model-factory-cloud-dispatch-v1/current.md`](../../handoffs/model-factory-cloud-dispatch-v1/current.md)
-("V-316 CLOSED" section) — those are the source of truth, not this file.**
+diverged. The real root-cause story and what is proven working end-to-end (S1-S6, correct
+S6g gate deference, live on a real cloud VM) is written up in
+`PRs/model-factory-cloud-dispatch-v1/RUN-LOG.md` and
+`handoffs/model-factory-cloud-dispatch-v1/current.md` ("V-316 CLOSED" section). **Those files
+live in `emanate-tecum-workflow` and are NOT in this repo** — the harness import only ever
+brought `fine-tuning/` and `cloud-sessions/`, so do not go looking for them here and do not
+treat their absence as a broken clone.
 
 §§1-7 below are otherwise still substantively accurate (the heartbeat/claim/gate mechanics,
-the relay-claim exchange, the launch relay) — only the repo/branch identity and the dispatch
-trigger mechanism in §8's literal templates are wrong. Left as historical design record rather
-than deleted; do not follow §8's `cs new --cloud --plan` instructions or its `emanate-tecum-workflow`
-/ `cloud-dispatch/finetune-rehearsal-v1` references literally.
+the relay-claim exchange, the launch relay). §8's `cs new --cloud --plan` dispatch *mechanism*
+is historical — dispatch is a routine now — but §8's **repo and branch identity have been
+corrected for this repo** (2026-08-24): you are in
+`daniel-tecum-emanate/Emanate-AI-model-factory-cloud-env`, on `main`, and `main` carries the
+whole pipeline. There is no branch to switch to. Any remaining `cs new --cloud --plan`
+wording in §8 is the part to ignore; the branch/environment verification in step 3 is real
+and current.
+
+**Cross-repo citations in this file.** Paths beginning `PRs/`, `handoffs/` or `company-brain/`
+refer to `emanate-tecum-workflow`, a different repository. They are kept as provenance for
+where a decision was made. None of them resolve here, and none of them are required reading
+to run the pipeline — everything you actually need is in this repo.
 
 <details>
 <summary>Original 2026-08-19 status note (superseded, kept for history)</summary>
@@ -42,8 +51,10 @@ playbook *as a whole run* is `UNVERIFIED`. Do not read "concrete" below as "trie
 </details>
 
 Read [`02-dispatch.md`](02-dispatch.md) and [`10-fleet.md`](10-fleet.md) in full first — this
-file assumes both. It is the third leg of
-[`PRD.md`](../../PRs/model-factory-finetune-launcher-v1/PRD.md)'s Phase 2: T2-1 ports the
+file assumes both. (Both are in this repo, and the harness trim kept every playbook precisely
+so these cross-references stay live.) It is the third leg of
+`PRs/model-factory-finetune-launcher-v1/PRD.md`'s Phase 2 (cross-repo — see the note above):
+T2-1 ports the
 Fireworks launch/monitor loop to a Trigger.dev task, T2-2 wires its real cost into
 `factory_runs.cost_actual_usd`, T2-3 connects `factory.py`'s `stage_launch`/`stage_train` to
 that task. **This file is the dispatch brief for the fourth piece: a cloud Claude Code
@@ -106,7 +117,7 @@ nothing). A cloud VM dispatched against `emanate-tecum-workflow` will **not** ha
 `platform-alpha` checked out. Whatever T2-3 ends up building to call T2-1's Trigger.dev task
 — an HTTP call to a platform-alpha API route wrapping `tasks.trigger()`, or Trigger.dev's own
 REST API directly, both still under research per
-[`PRContext-phase2.md`](../../PRs/model-factory-finetune-launcher-v1/PRContext-phase2.md)'s
+`PRs/model-factory-finetune-launcher-v1/PRContext-phase2.md`'s (cross-repo)
 T2-3 section — needs to be reachable **over the network** from this VM, not present on its
 disk, for this single-repo dispatch model to work as written. **Open question, not guessed
 here:** if T2-3 lands as something that instead needs a local `platform-alpha` checkout (e.g.
@@ -459,14 +470,21 @@ point of `--plan` is giving the session something it can re-read after compactio
 terminal, once T2-1/T2-2/T2-3 have landed and `<org-slug>` is a real, census-ready org:
 
 ```bash
-cd /path/to/emanate-tecum-workflow
+cd /path/to/Emanate-AI-model-factory-cloud-env
 git add cloud-sessions/playbooks/11-finetune-pipeline-agent.md
 git commit -m "docs: fine-tune pipeline orchestrator playbook"
 git push
 
 cs new --cloud --plan cloud-sessions/playbooks/11-finetune-pipeline-agent.md \
-  "Orchestrate one fine-tuning pipeline run for org <org-slug> through fine-tuning/factory-product/factory.py on branch cloud-dispatch/finetune-rehearsal-v1 (NOT main, which does not contain this pipeline), following cloud-sessions/playbooks/11-finetune-pipeline-agent.md exactly — its step 2 exchanges your fire payload's relay claim code for real sync credentials, and step 3 is a mandatory branch/environment verification; run both first, in order, and heartbeat each result before anything else. Stop and declare a blocker at any HUMAN_GATE (governance/launch/ship) rather than guessing past it. Never touch FIREWORKS_API_KEY or FACTORY_SUPABASE_SERVICE_ROLE_KEY. When training completes or fails unresolvably, call cloud-heartbeat.sh done or blocked and stop."
+  "Orchestrate one fine-tuning pipeline run for org <org-slug> through fine-tuning/factory-product/factory.py on the default branch of this repo (main — it carries the whole pipeline; there is no branch to switch to), following cloud-sessions/playbooks/11-finetune-pipeline-agent.md exactly — its step 2 exchanges your fire payload's relay claim code for real sync credentials, and step 3 is a mandatory environment verification; run both first, in order, and heartbeat each result before anything else. Stop and declare a blocker at any HUMAN_GATE (governance/launch/ship) rather than guessing past it. Never touch FIREWORKS_API_KEY or FACTORY_SUPABASE_SERVICE_ROLE_KEY. When training completes or fails unresolvably, call cloud-heartbeat.sh done or blocked and stop."
 ```
+
+**Corrected 2026-08-24.** The two paragraphs above are the historical `cs new --cloud --plan`
+route; the live route is the `model-factory-finetune-orchestrator-v1` routine. The repo and
+branch identity in the payload has been fixed either way — it used to name
+`cloud-dispatch/finetune-rehearsal-v1` on `emanate-tecum-workflow`, a branch that **does not
+exist in this repository at all**. An agent following the old text would have tried to check
+out a nonexistent ref.
 
 The self-contained instruction block below is what the dispatched session should treat as
 its own operating rules for the run — it restates §1–7 above in second person, the way
@@ -475,9 +493,10 @@ its own operating rules for the run — it restates §1–7 above in second pers
 ````text
 You are orchestrating one fine-tuning pipeline run for org <org-slug>, using
 fine-tuning/factory-product/factory.py and run_pipeline.py in this repo
-(emanate-tecum-workflow), on branch cloud-dispatch/finetune-rehearsal-v1 —
-NOT main, which does not contain fine-tuning/factory-product/ at all. Full
-detail for every step below is in
+(daniel-tecum-emanate/Emanate-AI-model-factory-cloud-env), on its default
+branch, main. main carries fine-tuning/factory-product/ and cloud-sessions/ at
+the root — there is NO branch to switch to and no branch-switching step in this
+run. Full detail for every step below is in
 cloud-sessions/playbooks/11-finetune-pipeline-agent.md — read it in full before
 starting, it is more precise than this summary.
 
@@ -514,22 +533,25 @@ starting, it is more precise than this summary.
 
 3. Verify your environment before anything else — three real dispatch
    attempts on 2026-08-19/20 produced zero heartbeat signal, and the leading
-   suspected cause is a clone that silently defaulted to main and never
-   switched branches. Run these two commands literally, first, and heartbeat
-   the result no matter what it is:
+   suspected cause was an environment that did not actually contain the
+   pipeline. That is what this step rules out. Run these two commands
+   literally, first, and heartbeat the result no matter what it is:
      git branch --show-current
      ls fine-tuning/factory-product/factory.py
-   If the branch is not cloud-dispatch/finetune-rehearsal-v1, or factory.py is
-   missing, do NOT guess or improvise a fix silently — run exactly:
-     git fetch origin cloud-dispatch/finetune-rehearsal-v1 && \
-     git checkout cloud-dispatch/finetune-rehearsal-v1
-   then re-run both verification commands. If factory.py is still missing
-   after that, call:
+   Corrected 2026-08-24: this repo's main IS the pipeline, so the expected
+   branch is main (or whatever the routine checked out for you) and there is
+   NO branch to switch to. Do not fetch or check out
+   cloud-dispatch/finetune-rehearsal-v1 — that branch belonged to the old
+   emanate-tecum-workflow layout and does not exist in this repository. The
+   branch name is informational here; the load-bearing assertion is the
+   second command.
+   If factory.py is missing, do NOT guess, improvise, or try to reconstruct
+   the pipeline from memory, and do NOT go looking for another branch — call:
      bash cloud-sessions/bin/cloud-heartbeat.sh blocked --kind dependency-missing \
-       --detail "cloud-dispatch/finetune-rehearsal-v1 checked out but fine-tuning/factory-product/factory.py still absent"
-   and stop — do not attempt to reconstruct the pipeline from memory. Once
-   verified, beat once more with the confirmed branch name in --note before
-   moving on, so this step's result is never silent even on success.
+       --detail "fine-tuning/factory-product/factory.py absent on <branch> — wrong repo or a bad clone"
+   and stop. Once verified, beat once more with the confirmed branch name in
+   --note before moving on, so this step's result is never silent even on
+   success.
 
 4. Claim this org+stream before doing any real work — a second session (yours
    from a retry, or a genuinely different one) must never advance the same
@@ -638,7 +660,7 @@ actual "Start fine-tune" button in Model Factory works, since a UI action has no
 mechanism that closes this gap is real and already confirmed working on this account: **claude.ai
 routines** (`cloud-sessions/playbooks/05-routines.md`, VERIFIED 2026-08-12 — created via the API
 and fired on demand, no TTY needed) — see
-`../../PRs/model-factory-finetune-launcher-v1/ARCHITECTURE.md`'s "Dispatch mechanism" section for
+`PRs/model-factory-finetune-launcher-v1/ARCHITECTURE.md`'s "Dispatch mechanism" section for
 the full design.
 
 Shape:
@@ -696,7 +718,7 @@ step, not assumed. See `PRs/model-factory-cloud-environment-v1/06-synthesis-and-
 - **T2-1/T2-2/T2-3 are now built** (2026-08-19, `platform-alpha` worktree
   `-model-factory-finetune-launcher-v2`, uncommitted, no PR yet) — §4's trigger step and §6's
   cost-confirmation step name real files/columns that now exist and have a real writer (see
-  `../../PRs/model-factory-finetune-launcher-v1/phase-2-credentialed-launch/README.md`). §4's
+  `PRs/model-factory-finetune-launcher-v1/phase-2-credentialed-launch/README.md`). §4's
   "TBD" framing below is stale as of this build landing — the mechanism is
   `trigger_dev_rest.trigger_task("factory-launch-monitor", ...)`, not actually unknown anymore.
 - **The Supabase-sync-vs-heartbeat-bridge gap in §7 — the credential-delivery half is now
@@ -735,7 +757,7 @@ step, not assumed. See `PRs/model-factory-cloud-environment-v1/06-synthesis-and-
 - `fine-tuning/factory-product/factory_stages.py` — the canonical stage list and gate set
 - `fine-tuning/factory-product/run_pipeline.py` — the existing stage-walking script this
   playbook wraps rather than reimplements
-- [`PRs/model-factory-finetune-launcher-v1/PRD.md`](../../PRs/model-factory-finetune-launcher-v1/PRD.md)
-  and
-  [`PRContext-phase2.md`](../../PRs/model-factory-finetune-launcher-v1/PRContext-phase2.md) —
-  the architecture decision and task breakdown this playbook implements (T2-4)
+- `PRs/model-factory-finetune-launcher-v1/PRD.md` and its `PRContext-phase2.md` —
+  the architecture decision and task breakdown this playbook implements (T2-4).
+  **Cross-repo (`emanate-tecum-workflow`), not present here** — provenance, not required
+  reading for a run

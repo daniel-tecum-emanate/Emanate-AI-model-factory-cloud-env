@@ -3,8 +3,12 @@
 > **Provenance note, 2026-08-18:** originally written against a different repo
 > (`daniel0tgc/internal-company-tool`) — mechanism-level content stands. Its
 > `atlas-os/heartbeat/` board references do not exist in this repo
-> (`emanate-tecum-workflow`); `cs board`/`cs exodus` therefore refuse loudly here by design
-> (see [`09-porting-to-another-repo.md`](09-porting-to-another-repo.md)).
+> (`Emanate-AI-model-factory-cloud-env`); `cs board`/`cs exodus` therefore refuse loudly here
+> by design (see [`09-porting-to-another-repo.md`](09-porting-to-another-repo.md)).
+> **Updated 2026-08-24:** the same applies to every `../../atlas-os/...` and
+> `../../.claude/...` link below — none of them resolve here. They are kept as provenance
+> for where the mechanism was proven, not as things to open. This playbook is not part of
+> the fine-tuning run path; playbook 11 mandates only `02-dispatch.md` and `10-fleet.md`.
 
 How several local sessions stop being invisible to each other, and how everything movable
 goes to the cloud in one motion. Written for the operator who has forgotten the

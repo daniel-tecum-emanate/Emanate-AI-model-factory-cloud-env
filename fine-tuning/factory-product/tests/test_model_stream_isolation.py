@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import importlib.util
+
 import pytest
 
 HERE = Path(__file__).resolve().parent
@@ -364,6 +366,16 @@ def test_factory_stage_dispatch_passes_explicit_intelligence_stream():
     assert dispatch.call_args.kwargs["model_stream"] == "intelligence"
 
 
+# Cloud-environment guard, added 2026-08-24 (post-trim verification): this test patches
+# `factory_cursor_dispatch.execute`, and importing that module requires `cursor_guard`,
+# which is DELIBERATELY absent here (V-364 — it backs a local `claude` CLI with a machine's
+# own Anthropic auth, which this environment is structurally barred from holding).
+# Do NOT "fix" this by adding cursor_guard.py. Same guard as tests/conftest.py's
+# collect_ignore for test_cursor_dispatch.py.
+@pytest.mark.skipif(
+    importlib.util.find_spec("cursor_guard") is None,
+    reason="cursor_guard is deliberately absent from this cloud environment (V-364)",
+)
 def test_intelligence_cursor_dispatch_refuses_before_default_paths_are_used(
     monkeypatch
 ):
