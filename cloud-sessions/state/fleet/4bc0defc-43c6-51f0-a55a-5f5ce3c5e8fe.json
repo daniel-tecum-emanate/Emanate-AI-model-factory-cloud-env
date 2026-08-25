@@ -1,6 +1,12 @@
 {
-  "beats": 3,
-  "blocker": null,
+  "beats": 4,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and live, held by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd, currently BLOCKED at the S6g launch gate (projected all-in cost $48.18 vs cap $50, stop-gate $100) awaiting Daniel's approval - see that session's 07-launch-report.json",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run",
+    "restated_at": "2026-08-25T06:00:39Z",
+    "since": "2026-08-25T06:00:39Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -28,6 +34,13 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T06:00:28Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and live, held by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd, currently BLOCKED at the S6g launch gate (projected all-in cost $48.18 vs cap $50, stop-gate ",
+      "kind": "needs-human-action",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T06:00:39Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -37,13 +50,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "env verified: pwd=/home/user/Emanate-AI-model-factory-cloud-env, fine-tuning/factory-product/factory.py present. Fire payload has relay_claim_code but no app_base_url, so sync exchange cannot be constructed (won't guess app_base_url) - running without DB sync per fail-open behavior",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "4bc0defc-43c6-51f0-a55a-5f5ce3c5e8fe",
   "started_at": "2026-08-25T06:00:09Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T06:00:28Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T06:00:39Z"
 }
