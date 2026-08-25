@@ -1,0 +1,37 @@
+{
+  "beats": 1,
+  "blocker": null,
+  "emitter": {
+    "name": "cloud-heartbeat.sh",
+    "version": 1
+  },
+  "ended_at": null,
+  "failure": null,
+  "git": {
+    "branch": "claude/determined-sagan-3f14am",
+    "head": "9eb1621"
+  },
+  "history": [
+    {
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:20Z",
+      "verb": "start"
+    }
+  ],
+  "host": {
+    "hostname": "vm",
+    "os": "Linux 6.18.44-fc-v21 x86_64",
+    "user": "root"
+  },
+  "kind": "cloud-heartbeat",
+  "lane": "finetune-grand-steel",
+  "last_verb": "start",
+  "note": "orchestrating grand-steel fine-tune pipeline; verified pwd and factory.py present at fine-tuning/factory-product/factory.py",
+  "phase": "",
+  "progress": null,
+  "schema": 1,
+  "session_id": "b66a0bb3-faef-532e-9cc5-04fe3f24dcb5",
+  "started_at": "2026-08-25T05:59:20Z",
+  "status": "ACTIVE",
+  "updated_at": "2026-08-25T05:59:20Z"
+}
