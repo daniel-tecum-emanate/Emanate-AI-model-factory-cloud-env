@@ -245,19 +245,45 @@ def project_decision_event(decision_row, run_id=None):
         "actor": decision_row.get("actor"),
         "context_refs": decision_row.get("context_refs"),
     }
-    row = {
+    # IDENTIFIERS PASS THROUGH UNSCRUBBED — same discipline `_digest_row` already
+    # applies, and for the same reason it documents.
+    #
+    # This function used to scrub the WHOLE row, `run_id` included. `_PHONE_RE`
+    # matches `\d{3}[-.\s]?\d{3}[-.\s]?\d{4}`, which a UUID segment satisfies
+    # whenever its digit groups happen to carry no hex letters. `_digest_row`'s
+    # docstring predicted this exactly and noted a real UUID "is only accidentally
+    # safe because it usually contains letters".
+    #
+    # On 2026-08-25 a real one was not safe. Running S2 governance for grand-steel
+    # against a live relay:
+    #     relay insert factory_run_events failed: 400
+    #     invalid input syntax for type uuid: "8a[redacted-phone]-4107-9ace-41e8321b540c"
+    # PostgREST rejects the row, `mirror_decision_event` is fail-open, so the error
+    # is logged and swallowed and the decision event is never recorded. The Model
+    # Factory tab shows a run with no decision history and nothing reports a fault.
+    #
+    # So the scrub applies to the two sections that carry content — `headline` (an
+    # agent-written choice) and `detail`, whose `rationale` is free text and the
+    # likeliest place a stray email or phone actually arrives. `kind` is a fixed
+    # literal and `ref` holds only identifiers.
+    scrubbed = _scrub_structured_pii(
+        {
+            "headline": f"{decision_row.get('node_id')}: {decision_row.get('chosen')}",
+            "detail": detail,
+        }
+    )
+    return {
         "run_id": run_id or decision_row.get("run_id"),
         "kind": "decision_recorded",
-        "headline": f"{decision_row.get('node_id')}: {decision_row.get('chosen')}",
+        "headline": scrubbed["headline"],
         "ref": {
             "event_subtype": "decision_recorded",
             "decision_id": decision_row.get("decision_id"),
             "node_id": decision_row.get("node_id"),
             "graph_id": decision_row.get("graph_id"),
         },
-        "detail": detail,
+        "detail": scrubbed["detail"],
     }
-    return _scrub_structured_pii(row)
 
 
 def push_decision(decision_row, run_id=None, url=None, service_role_key=None):
