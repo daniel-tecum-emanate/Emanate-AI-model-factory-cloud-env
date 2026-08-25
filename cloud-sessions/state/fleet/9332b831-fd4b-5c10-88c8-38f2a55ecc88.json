@@ -1,6 +1,12 @@
 {
-  "beats": 2,
-  "blocker": null,
+  "beats": 3,
+  "blocker": {
+    "detail": "grand-steel/per-account is already claimed and alive by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd, lane finetune-grand-steel, stage launch. That session's blocker: S6g launch gate pending for grand-steel: projected all-in cost $48.18 vs cap $50 (stop-gate $100) - see 07-launch-report.json for full decision_request. This session (run_id=run-1) did not proceed since the claim is LIVE, not stale.",
+    "kind": "needs-human-action",
+    "needs": "Daniel to confirm which session should own this run, and/or approve the pending launch gate on the existing session (session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd) via the Model Factory tab or factory.py grand-steel --stage launch --approved",
+    "restated_at": "2026-08-25T06:00:42Z",
+    "since": "2026-08-25T06:00:42Z"
+  },
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
@@ -22,6 +28,14 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T06:00:28Z",
       "verb": "beat"
+    },
+    {
+      "detail": "grand-steel/per-account is already claimed and alive by session a4e6b09e-c066-50d3-9740-1aff9f2ed8bd, lane finetune-grand-steel, stage launch. That session's blocker: S6g launch gate pending for grand",
+      "kind": "needs-human-action",
+      "phase": "relay_claim_code present in fire payload but app_base_url absent - cannot perform sync/exchange without guessing the app base URL; proceeding without DB sync for this run",
+      "status": "BLOCKED",
+      "ts": "2026-08-25T06:00:42Z",
+      "verb": "blocked"
     }
   ],
   "host": {
@@ -31,13 +45,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "beat",
+  "last_verb": "blocked",
   "note": "confirmed pwd=/home/user/Emanate-AI-model-factory-cloud-env and fine-tuning/factory-product/factory.py present; orchestrating grand-steel fine-tune pipeline",
   "phase": "relay_claim_code present in fire payload but app_base_url absent - cannot perform sync/exchange without guessing the app base URL; proceeding without DB sync for this run",
   "progress": null,
   "schema": 1,
   "session_id": "9332b831-fd4b-5c10-88c8-38f2a55ecc88",
   "started_at": "2026-08-25T06:00:11Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-08-25T06:00:28Z"
+  "status": "BLOCKED",
+  "updated_at": "2026-08-25T06:00:42Z"
 }
