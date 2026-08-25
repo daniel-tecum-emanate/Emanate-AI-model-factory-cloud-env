@@ -1,5 +1,5 @@
 {
-  "beats": 1,
+  "beats": 2,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -16,6 +16,12 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:26Z",
       "verb": "start"
+    },
+    {
+      "phase": "relay_claim_code present in fire payload but app_base_url absent - cannot perform sync exchange; running without DB sync for this run",
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:47Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -25,13 +31,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "start",
+  "last_verb": "beat",
   "note": "verified factory.py present at fine-tuning/factory-product/factory.py; pwd=/home/user/Emanate-AI-model-factory-cloud-env",
-  "phase": "",
+  "phase": "relay_claim_code present in fire payload but app_base_url absent - cannot perform sync exchange; running without DB sync for this run",
   "progress": null,
   "schema": 1,
   "session_id": "b6d0d252-5e18-5680-bf15-532eef31012e",
   "started_at": "2026-08-25T05:59:26Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:26Z"
+  "updated_at": "2026-08-25T05:59:47Z"
 }
