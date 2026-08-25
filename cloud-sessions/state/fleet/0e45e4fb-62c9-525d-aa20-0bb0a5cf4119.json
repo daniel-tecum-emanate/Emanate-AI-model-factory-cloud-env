@@ -1,5 +1,5 @@
 {
-  "beats": 1,
+  "beats": 2,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -16,6 +16,11 @@
       "status": "ACTIVE",
       "ts": "2026-08-25T05:59:11Z",
       "verb": "start"
+    },
+    {
+      "status": "ACTIVE",
+      "ts": "2026-08-25T05:59:16Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -25,13 +30,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "finetune-grand-steel",
-  "last_verb": "start",
-  "note": "orchestrating grand-steel fine-tune pipeline",
+  "last_verb": "beat",
+  "note": "confirmed fine-tuning/factory-product/factory.py present at repo root",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "0e45e4fb-62c9-525d-aa20-0bb0a5cf4119",
   "started_at": "2026-08-25T05:59:11Z",
   "status": "ACTIVE",
-  "updated_at": "2026-08-25T05:59:11Z"
+  "updated_at": "2026-08-25T05:59:16Z"
 }
