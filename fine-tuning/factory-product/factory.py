@@ -984,7 +984,90 @@ def stage_export(cfg, slug, args):
         payload["status"] = "ok"
         print(f"[export] command emitted (pass --live to execute):\n         {cmd}")
     payload["next"] = "build"
+    payload["heldout_seal"] = _autoseal_heldout(slug, cfg, args)
     return write_report(slug, "export", payload, cfg, _sync_url(args))
+
+
+# ----------------------------------------------------------------- S4 build
+
+def _autoseal_heldout(slug, cfg, args):
+    """Seal this iteration's held-out anchor from the exported population.
+
+    Returns a small dict for the S3 report so the decision is auditable: what was
+    sealed, or precisely why it was not.
+    """
+    try:
+        import factory_context
+        import factory_heldout
+    except Exception as exc:  # noqa: BLE001
+        return {"sealed": False, "reason": f"held-out module unavailable: {exc}"}
+
+    stream = _model_stream(cfg, args)
+    try:
+        iteration = factory_context._load_state(slug, stream=stream).get("iteration") or 1
+        existing = factory_heldout.load_manifest(slug, iteration, stream=stream)
+        if existing:
+            return {
+                "sealed": True,
+                "iteration": iteration,
+                "already": True,
+                "population_fingerprint": existing.get("population_fingerprint"),
+                "heldout_count": existing.get("heldout_count"),
+            }
+
+        population = _exported_population(cfg)
+        if not population:
+            return {
+                "sealed": False,
+                "iteration": iteration,
+                "reason": "no exported dossiers found to sample a population from",
+            }
+        if args.dry_run:
+            return {
+                "sealed": False,
+                "iteration": iteration,
+                "reason": f"dry-run: would seal from a population of {len(population)}",
+            }
+
+        manifest = factory_heldout.seal(slug, population, iteration=iteration, stream=stream)
+        print(
+            f"[export] held-out anchor SEALED for iteration {iteration}: "
+            f"{manifest.get('heldout_count')} of {manifest.get('population_size')} "
+            f"(fingerprint {manifest.get('population_fingerprint')})"
+        )
+        return {
+            "sealed": True,
+            "iteration": iteration,
+            "population_fingerprint": manifest.get("population_fingerprint"),
+            "heldout_count": manifest.get("heldout_count"),
+            "population_size": manifest.get("population_size"),
+        }
+    except Exception as exc:  # noqa: BLE001
+        # Soft-fail by design — see the caller's note. Loud, but never fatal.
+        print(f"[export] WARNING: could not seal the held-out anchor: {exc}", file=sys.stderr)
+        return {"sealed": False, "reason": str(exc)}
+
+
+def _exported_population(cfg):
+    """The item ids to sample the held-out set from — one per exported dossier.
+
+    The dossier filename stem IS the account identifier the rest of the pipeline
+    keys on, so the population is read from what export actually wrote rather
+    than from a count carried in config. If they disagree, what is on disk wins:
+    a population that does not match the corpus is how a held-out set silently
+    stops covering the thing it is meant to hold out.
+    """
+    from pathlib import Path
+
+    out = cfg.get("paths", {}).get("dossiers_out")
+    if not out:
+        return []
+    base = Path(out)
+    if not base.is_absolute():
+        base = REPO / "platform-alpha" / out
+    if not base.exists():
+        return []
+    return sorted(p.stem for p in base.glob("*.json") if p.is_file())
 
 
 # ----------------------------------------------------------------- S4 build
@@ -1058,32 +1141,114 @@ def stage_build(cfg, slug, args):
 
 # ---------------------------------------------------------------- S5 verify
 
+def _run_battery(battery, args):
+    """Actually EXECUTE the verification battery and parse each exit code.
+
+    Until 2026-08-25 this stage never ran anything. It printed
+    "presence-checked, not executed" — hardcoded, regardless of `--live` — and
+    its presence check resolved script paths against `platform-alpha/` and a
+    sibling `platform-alpha-v5/`, while the scripts live here in
+    `fine-tuning/factory-product/`. So every check reported
+    `script_on_disk: false` even once written, and nothing ever ran. The stage's
+    own todo said as much: "run them here directly and parse pass/fail".
+
+    That mattered because S5 is the only thing standing between a corpus and the
+    S6g spend gate. A battery that never executes protects nothing, while
+    reporting as though it does.
+
+    Exit-code contract, shared by every check (see `style_concentration.py`):
+        0 = pass, 1 = fail, 2 = suspect (could not evaluate)
+    Anything else is treated as `suspect`, never as a pass — an unevaluated check
+    and a clean check must never look the same (LESSON-016, `audit_lib`'s
+    degradation lattice).
+    """
+    import shlex
+
+    results = []
+    for item in battery:
+        parts = shlex.split(item["command"])
+        # Entries that are a described pattern rather than a runnable command
+        # (check #3, "mechanize per corpus") stay unexecuted and unclaimed.
+        if not parts or parts[0] != "python3":
+            results.append({**item, "script_on_disk": None, "exit_code": None,
+                            "result": "not_mechanized",
+                            "summary": "no script — described pattern only"})
+            continue
+
+        script = (HERE / parts[1]).resolve()
+        if not script.exists():
+            results.append({**item, "script_on_disk": False, "exit_code": None,
+                            "result": "suspect",
+                            "summary": f"script not on disk: {parts[1]}"})
+            continue
+        if args.dry_run:
+            results.append({**item, "script_on_disk": True, "exit_code": None,
+                            "result": "not_run", "summary": "dry-run: present, not executed"})
+            continue
+
+        cmd = ["python3", str(script)] + parts[2:]
+        try:
+            r = subprocess.run(cmd, cwd=str(HERE), capture_output=True, text=True, timeout=600)
+            code = r.returncode
+            tail = (r.stdout or r.stderr or "").strip().splitlines()
+            results.append({
+                **item,
+                "script_on_disk": True,
+                "exit_code": code,
+                "result": {0: "pass", 1: "fail"}.get(code, "suspect"),
+                "summary": tail[-1][:300] if tail else "",
+                "stdout_tail": (r.stdout or "")[-1500:],
+            })
+        except subprocess.TimeoutExpired:
+            results.append({**item, "script_on_disk": True, "exit_code": None,
+                            "result": "suspect", "summary": "timed out after 600s"})
+        except Exception as exc:  # noqa: BLE001
+            results.append({**item, "script_on_disk": True, "exit_code": None,
+                            "result": "suspect", "summary": f"could not execute: {exc}"})
+    return results
+
+
 def stage_verify(cfg, slug, args):
     """Deterministic verification battery — ALL must pass, $0. Wraps the proven checks."""
     platform = (REPO / cfg["paths"]["platform_repo"]).resolve()
     corpus = f"finetune-out/together-export/combined-train-{slug}-v1.jsonl"
+    # The corpus path the checks score. Absolute, because the checks now run with
+    # cwd = HERE (see `_run_battery`) rather than inside platform-alpha.
+    corpus_abs = (REPO / cfg["paths"]["platform_repo"] / corpus).resolve()
+    dossiers_abs = (REPO / cfg["paths"]["platform_repo"] / cfg["paths"]["dossiers_out"]).resolve()
     battery = [
         {"check": "deterministic corpus verifier (100% coverage: verbatim grounding, masks, weights, caps, probe guard)",
-         "command": "python3 scripts/v5/verify-v5-corpus.py", "catalog": "#1"},
+         "command": f"python3 scripts/v5/verify-v5-corpus.py --corpus {corpus_abs}", "catalog": "#1"},
         {"check": "contradiction linter — 0 unmarked (MANDATORY, L37)",
-         "command": f"python3 scripts/qa-contradiction-lint.py --corpus {corpus} --gate", "catalog": "#2"},
+         "command": f"python3 scripts/qa-contradiction-lint.py --corpus {corpus_abs}", "catalog": "#2"},
         {"check": "shortcut hunt (position bias, counter-instances, cue separation, sibling eff-lb ratios)",
          "command": "V5-SHORTCUT-CHECK pattern — mechanize per corpus", "catalog": "#3"},
         {"check": "reserved-key / leakage diff vs EVAL_RESERVED",
-         "command": "python3 scripts/v5/reserved-diff-v5.py", "catalog": "#4"},
-        {"check": "style-concentration detector (top-1 opening >=30% / top-3 >=60% / length CV <=0.20)",
-         "command": "python3 scripts/preflight/style_concentration.py --self-test", "catalog": "#29"},
+         # `--population` is NOT optional here. Without it the check leaves
+         # `population_drift` UNCHECKED and returns PASS — measured 2026-08-25 on
+         # grand-steel, where the drift-aware form correctly returns SUSPECT
+         # (325 sealed vs 331 now). A leakage check that is not looking at
+         # coverage reports clean for the same reason it reports anything: it
+         # did not look. That is the precise failure this battery exists to stop,
+         # so the stricter invocation is the one the stage runs.
+         "command": (f"python3 scripts/v5/reserved-diff-v5.py --corpus {corpus_abs} "
+                     f"--slug {slug} --population {dossiers_abs}"), "catalog": "#4"},
+        {"check": "style-concentration detector (top-1 opening >=30% / top-3 >=60%)",
+         "command": f"python3 scripts/preflight/style_concentration.py --corpus {corpus_abs}", "catalog": "#29"},
         {"check": "render-verify pre-upload (masks correct on the EXACT Fireworks renderer, qwen3_6)",
-         "command": "python3 scripts/v5/render-verify-upload.py", "catalog": "runbook B.9-10"},
+         "command": f"python3 scripts/v5/render-verify-upload.py --corpus {corpus_abs}", "catalog": "runbook B.9-10"},
     ]
-    presence = []
-    for item in battery:
-        script = item["command"].split()
-        found = None
-        if len(script) >= 2 and script[0] == "python3":
-            found = (platform.parent / "platform-alpha-v5" / script[1]).exists() or (platform / script[1]).exists()
-        presence.append({**item, "script_on_disk": found})
-    print(f"[verify] battery has {len(battery)} all-must-pass checks (dry-run: presence-checked, not executed)")
+    presence = _run_battery(battery, args)
+    executed = [p for p in presence if p.get("exit_code") is not None]
+    failed = [p for p in presence if p.get("result") == "fail"]
+    suspect = [p for p in presence if p.get("result") == "suspect"]
+    print(
+        f"[verify] battery: {len(executed)}/{len(battery)} executed, "
+        f"{len(failed)} FAIL, {len(suspect)} SUSPECT"
+    )
+    for p in presence:
+        if p.get("result") in ("fail", "suspect"):
+            print(f"[verify]   {p['result'].upper()} {p['catalog']}: {str(p.get('summary'))[:150]}")
     nodes = _dispatch_stage_nodes("S5", cfg, slug, args)
     findings = {}
     if nodes and not args.dry_run:
