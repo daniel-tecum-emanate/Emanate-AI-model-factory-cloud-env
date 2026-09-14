@@ -1,11 +1,11 @@
 {
-  "beats": 5,
+  "beats": 6,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
   },
-  "ended_at": null,
+  "ended_at": "2026-09-14T14:53:36Z",
   "failure": null,
   "git": {
     "branch": "claude/eval-scorer-v1-alfic5",
@@ -36,6 +36,11 @@
       "status": "ACTIVE",
       "ts": "2026-09-14T14:53:27Z",
       "verb": "beat"
+    },
+    {
+      "status": "DONE",
+      "ts": "2026-09-14T14:53:36Z",
+      "verb": "done"
     }
   ],
   "host": {
@@ -45,13 +50,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "eval-scorer",
-  "last_verb": "beat",
-  "note": "addressed review comment on PR#2: fixed factory_model_evals schema (on_conflict key, run_kind/arm/verdict closed vocab, metrics jsonb); pushed 90a0045, 1115p/33s/2x locally, replied on PR",
+  "last_verb": "done",
+  "note": "Addressed daniel's schema review on PR#2, pushed 90a0045 (1089/33/2 -> 1115/33/2, +26 tests). factory_model_evals row shape now matches reviewer-verified production schema (on_conflict key, run_kind/arm/verdict closed vocab, metrics jsonb). Still not migration-verified, still not wired to a live model. PR clean/mergeable, no CI configured in repo.",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "19845eb7-096c-50f2-a2a0-4ec1047443db",
   "started_at": "2026-09-14T14:36:51Z",
-  "status": "ACTIVE",
-  "updated_at": "2026-09-14T14:53:27Z"
+  "status": "DONE",
+  "updated_at": "2026-09-14T14:53:36Z"
 }
