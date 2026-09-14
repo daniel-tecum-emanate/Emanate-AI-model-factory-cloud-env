@@ -1,0 +1,45 @@
+{
+  "beats": 1,
+  "blocker": {
+    "detail": "routine fired with no org/run_id payload - this fire instead carried a github-trigger-context for pull_request.opened (PR #2, branch claude/eval-scorer-v1-alfic5 -> main) with no fine-tuning run_id/org/relay_claim_code/app_base_url fields; not guessing an org",
+    "kind": "dependency-missing",
+    "needs": "",
+    "restated_at": "2026-09-14T14:44:19Z",
+    "since": "2026-09-14T14:44:19Z"
+  },
+  "emitter": {
+    "name": "cloud-heartbeat.sh",
+    "version": 1
+  },
+  "ended_at": null,
+  "failure": null,
+  "git": {
+    "branch": "claude/determined-sagan-rrtmhe",
+    "head": "01f49ed"
+  },
+  "history": [
+    {
+      "detail": "routine fired with no org/run_id payload - this fire instead carried a github-trigger-context for pull_request.opened (PR #2, branch claude/eval-scorer-v1-alfic5 -> main) with no fine-tuning run_id/or",
+      "kind": "dependency-missing",
+      "status": "BLOCKED",
+      "ts": "2026-09-14T14:44:19Z",
+      "verb": "blocked"
+    }
+  ],
+  "host": {
+    "hostname": "vm",
+    "os": "Linux 6.18.44-fc-v24 x86_64",
+    "user": "root"
+  },
+  "kind": "cloud-heartbeat",
+  "lane": "9f019a1e-5c65-57cd-8d70-c13e835ef56c",
+  "last_verb": "blocked",
+  "note": "",
+  "phase": "",
+  "progress": null,
+  "schema": 1,
+  "session_id": "9f019a1e-5c65-57cd-8d70-c13e835ef56c",
+  "started_at": "2026-09-14T14:44:19Z",
+  "status": "BLOCKED",
+  "updated_at": "2026-09-14T14:44:19Z"
+}
