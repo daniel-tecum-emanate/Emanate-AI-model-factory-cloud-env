@@ -1,15 +1,15 @@
 {
-  "beats": 4,
+  "beats": 5,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
     "version": 1
   },
-  "ended_at": "2026-09-14T14:43:56Z",
+  "ended_at": null,
   "failure": null,
   "git": {
     "branch": "claude/eval-scorer-v1-alfic5",
-    "head": "01f49ed"
+    "head": "90a0045"
   },
   "history": [
     {
@@ -31,6 +31,11 @@
       "status": "DONE",
       "ts": "2026-09-14T14:43:56Z",
       "verb": "done"
+    },
+    {
+      "status": "ACTIVE",
+      "ts": "2026-09-14T14:53:27Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -40,13 +45,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "eval-scorer",
-  "last_verb": "done",
-  "note": "PR https://github.com/daniel-tecum-emanate/Emanate-AI-model-factory-cloud-env/pull/2 opened. Tests before/after: 1089/33/2 -> 1111/33/2 (1124 -> 1146 total, +22 new). factory_eval.py: balanced agreement, valid-emit floor, margin floor, cross-fingerprint refusal, first-train/retrain verdicts. NOT done: never scored a real model, factory_model_evals still empty/unwired from stage_eval, table schema unverified (platform-alpha migration not clonable here).",
+  "last_verb": "beat",
+  "note": "addressed review comment on PR#2: fixed factory_model_evals schema (on_conflict key, run_kind/arm/verdict closed vocab, metrics jsonb); pushed 90a0045, 1115p/33s/2x locally, replied on PR",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "19845eb7-096c-50f2-a2a0-4ec1047443db",
   "started_at": "2026-09-14T14:36:51Z",
-  "status": "DONE",
-  "updated_at": "2026-09-14T14:43:56Z"
+  "status": "ACTIVE",
+  "updated_at": "2026-09-14T14:53:27Z"
 }
