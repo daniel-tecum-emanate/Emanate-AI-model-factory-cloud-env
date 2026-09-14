@@ -984,11 +984,31 @@ def stage_export(cfg, slug, args):
         payload["status"] = "ok"
         print(f"[export] command emitted (pass --live to execute):\n         {cmd}")
     payload["next"] = "build"
+    # C3 (2026-08-25): seal the held-out anchor HERE, automatically.
+    #
+    # `factory_heldout.seal()` had no caller anywhere in the pipeline. Every
+    # reference to it was a warning string telling a human to run it by hand.
+    # So Grand Steel's iteration 1 was sealed once, manually, and every iteration
+    # after it was structurally unsealed — S4 printed "no held-out eval set is
+    # sealed for this iteration" on every run and nothing ever acted on it.
+    #
+    # That is worse than it sounds. `seal()` refuses once curation has started,
+    # on the correct principle that "a set drawn after the curator has seen the
+    # population is not held out from anything". So by the time the S4 warning is
+    # visible, the window to fix it that iteration has ALREADY closed. The advice
+    # in the warning cannot be taken.
+    #
+    # S3 is the last moment it can honestly happen: export has just materialized
+    # the population, and S4 curation has not yet looked at it. Sealing here makes
+    # the anchor a property of the pipeline rather than of someone remembering.
+    #
+    # Deliberately soft-failing: a seal problem must not destroy a completed
+    # export. S8 is the hard gate — it refuses a live verdict without a sealed
+    # set — so a miss here surfaces loudly at S4 and blocks at S8, exactly as
+    # before. This only removes the case where nobody ever seals at all.
     payload["heldout_seal"] = _autoseal_heldout(slug, cfg, args)
     return write_report(slug, "export", payload, cfg, _sync_url(args))
 
-
-# ----------------------------------------------------------------- S4 build
 
 def _autoseal_heldout(slug, cfg, args):
     """Seal this iteration's held-out anchor from the exported population.
