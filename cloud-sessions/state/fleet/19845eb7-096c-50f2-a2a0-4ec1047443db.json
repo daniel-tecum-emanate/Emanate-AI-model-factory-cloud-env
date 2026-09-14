@@ -1,5 +1,5 @@
 {
-  "beats": 2,
+  "beats": 3,
   "blocker": null,
   "emitter": {
     "name": "cloud-heartbeat.sh",
@@ -21,6 +21,11 @@
       "status": "ACTIVE",
       "ts": "2026-09-14T14:37:18Z",
       "verb": "beat"
+    },
+    {
+      "status": "ACTIVE",
+      "ts": "2026-09-14T14:42:28Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -31,12 +36,12 @@
   "kind": "cloud-heartbeat",
   "lane": "eval-scorer",
   "last_verb": "beat",
-  "note": "baseline confirmed 1089p/33s/2x, exploring factory_heldout + supabase_rest",
+  "note": "factory_eval.py + 22 tests written and passing; running full suite",
   "phase": "",
   "progress": null,
   "schema": 1,
   "session_id": "19845eb7-096c-50f2-a2a0-4ec1047443db",
   "started_at": "2026-09-14T14:36:51Z",
   "status": "ACTIVE",
-  "updated_at": "2026-09-14T14:37:18Z"
+  "updated_at": "2026-09-14T14:42:28Z"
 }
