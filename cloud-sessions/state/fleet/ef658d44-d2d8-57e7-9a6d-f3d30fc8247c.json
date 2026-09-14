@@ -1,5 +1,5 @@
 {
-  "beats": 2,
+  "beats": 3,
   "blocker": {
     "detail": "Baseline mismatch at expected commit 789fe82: got 1089 passed / 33 skipped / 2 xfailed (total 1124), not the documented 1096/26/2. Same total, but 7 tests shifted from passed->skipped, all for environment-availability reasons (schema-drift guard: no platform-alpha checkout/worktree found; test_qa_adversarial: local Supabase REST not reachable at 127.0.0.1:54321; test_graph_artifacts_edge: root bypasses file perms; etc.) \u2014 reproducible across 2 runs, not flaky. This looks like an environment-setup difference (e.g. no platform-alpha worktree, no local Supabase stack running) from whatever produced the 1096 baseline, not a code regression at this commit. Per instructions, stopping before building S8/factory_eval.py rather than proceeding on an unverified baseline. Need a decision: is 1089/33/2 the correct baseline to build against, or should this environment be given the missing platform-alpha worktree / local Supabase stack first?",
     "kind": "needs-decision",
@@ -29,6 +29,12 @@
       "status": "BLOCKED",
       "ts": "2026-09-14T03:12:32Z",
       "verb": "blocked"
+    },
+    {
+      "phase": "blocked, awaiting decision",
+      "status": "BLOCKED",
+      "ts": "2026-09-14T03:12:37Z",
+      "verb": "beat"
     }
   ],
   "host": {
@@ -38,13 +44,13 @@
   },
   "kind": "cloud-heartbeat",
   "lane": "eval-scorer",
-  "last_verb": "blocked",
-  "note": "building factory_eval.py",
-  "phase": "",
+  "last_verb": "beat",
+  "note": "needs: confirm whether 1089/33/2 (this env, no platform-alpha worktree, no local Supabase) is the correct baseline to build S8 eval scorer against, or whether env should be given those before proceeding",
+  "phase": "blocked, awaiting decision",
   "progress": null,
   "schema": 1,
   "session_id": "ef658d44-d2d8-57e7-9a6d-f3d30fc8247c",
   "started_at": "2026-09-14T03:11:28Z",
   "status": "BLOCKED",
-  "updated_at": "2026-09-14T03:12:32Z"
+  "updated_at": "2026-09-14T03:12:37Z"
 }
