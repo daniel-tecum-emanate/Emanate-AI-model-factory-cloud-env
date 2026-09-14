@@ -47,7 +47,10 @@ not answer" and "answered badly" are never the same number.
     manifest) is the only thing that makes two scores comparable. Diffing scores
     from different seals reports a change in the EVAL SET as a change in the
     MODEL — the exact self-inflation `factory_heldout.py`'s ordering guarantee
-    exists to prevent. `compare_scores` refuses whenever the fingerprints differ.
+    exists to prevent. `compare_scores` refuses whenever the fingerprints differ;
+    `compute_verdict` turns that specific refusal into an `incomparable` verdict
+    rather than silence, so a real attempt to compare across a reseal leaves an
+    audit trail instead of nothing.
   * **A verdict resting on one account** — with ~15 discriminating items, one
     flipped account swings balanced_agreement by roughly 1/(2*15) ≈ 3.3%.
     `_minimum_meaningful_margin` derives that swing from the ACTUAL
@@ -59,12 +62,34 @@ not answer" and "answered badly" are never the same number.
     product regression that LOOKS like progress on a base-relative chart, per
     the charter). `compute_verdict` refuses to guess which comparison was meant
     when the caller's `run_kind` and the supplied scores disagree.
+  * **A row the DB's own CHECK constraints would reject** — `write_score`
+    validates `arm`/`run_kind`/`verdict` against the closed vocabularies below
+    before ever calling `supabase_rest.upsert`, so a vocabulary mismatch is a
+    local `EvalRefused`, not a live PostgREST 400 the caller has to decode.
+
+## `factory_model_evals` schema
+
+Its migration lives on platform-alpha, which this repo doesn't clone — this
+module cannot read it directly. The shape below matches the schema as
+described in review on PR #2 (2026-09-14, queried directly against
+production): the upsert target is the unique index
+`uq_factory_model_evals_arm_on_set (model_id, eval_set_id,
+population_fingerprint)`; `arm` is checked against `{candidate, incumbent,
+base}`; `run_kind` against `{first-train, monthly-retrain}` (note the exact
+spelling — NOT `factory_context.py`'s pipeline-facing `first_run`/`retrain`,
+a different vocabulary for a different table, and every value this module
+emits is validated against the vocabulary below before being written); and
+`verdict` against `{improved, regressed, inconclusive, no_lift_over_base,
+incomparable}`. That description has not been independently verified against
+the migration file itself. `write_score` refuses to send anything outside
+these vocabularies rather than trust that description blindly.
 
 Dependencies: Python standard library + `requests` only (via `supabase_rest`),
 matching the rest of this package (`requirements.txt`). Writes go through the
 existing `supabase_rest.upsert` — this module opens no second DB path.
 """
 
+import datetime
 import logging
 from collections import Counter
 
@@ -73,20 +98,36 @@ import supabase_rest
 
 log = logging.getLogger(__name__)
 
-FIRST_RUN = "first_run"
-RETRAIN = "retrain"
+# `factory_model_evals.run_kind`'s CHECK constraint vocabulary. Deliberately
+# NOT the same strings as `factory_context.FIRST_RUN`/`RETRAIN` ("first_run"/
+# "retrain") — that module's vocabulary describes the pipeline's own run
+# classification; this one describes this DB column. A caller wiring the two
+# together is responsible for translating between them.
+FIRST_RUN = "first-train"
+RETRAIN = "monthly-retrain"
 RUN_KINDS = (FIRST_RUN, RETRAIN)
+
+# `factory_model_evals.arm`'s CHECK constraint vocabulary.
+ARM_CANDIDATE = "candidate"
+ARM_INCUMBENT = "incumbent"
+ARM_BASE = "base"
+ARMS = (ARM_CANDIDATE, ARM_INCUMBENT, ARM_BASE)
+
+# `factory_model_evals.verdict`'s CHECK constraint vocabulary.
+VERDICT_IMPROVED = "improved"
+VERDICT_REGRESSED = "regressed"
+VERDICT_INCONCLUSIVE = "inconclusive"
+VERDICT_NO_LIFT_OVER_BASE = "no_lift_over_base"
+VERDICT_INCOMPARABLE = "incomparable"
+VERDICTS = (
+    VERDICT_IMPROVED, VERDICT_REGRESSED, VERDICT_INCONCLUSIVE,
+    VERDICT_NO_LIFT_OVER_BASE, VERDICT_INCOMPARABLE,
+)
 
 # Below this fraction of held-out items actually answered, a score is not
 # trustworthy enough to store — see module docstring, "expired API key".
 MIN_VALID_EMIT_RATE = 0.80
 
-# The migration for this table lives on platform-alpha, a repository this
-# environment deliberately does not clone — its real column schema has NOT been
-# verified from here (contrast every table under data-model/, each backed by a
-# migration this repo can actually read). `write_score`'s row shape below is
-# this module's best-effort guess at what a scored arm needs to carry; treat it
-# as unverified until checked against the real migration.
 MODEL_EVALS_TABLE = "factory_model_evals"
 
 
@@ -96,12 +137,15 @@ class EvalError(RuntimeError):
 
 class EvalRefused(EvalError):
     """Raised whenever scoring or verdict logic would otherwise have to guess —
-    a low valid-emit rate, an unsealed/undersized held-out set, a cross-seal
-    comparison, or a `run_kind` the supplied evidence does not support.
+    a low valid-emit rate, an unsealed/undersized held-out set, a `run_kind`
+    the supplied evidence does not support, or a value the DB's own CHECK
+    constraints would reject.
 
     Deliberately a hard error, same discipline as `factory_heldout.HeldoutError`:
     every one of these paths would otherwise produce a *confident wrong number*,
-    which costs more than refusing to answer.
+    which costs more than refusing to answer. (Cross-seal comparison is the one
+    exception that does NOT surface this way from `compute_verdict` — see
+    `compare_scores` and the `incomparable` verdict.)
     """
 
 
@@ -254,20 +298,32 @@ def compare_scores(reference, candidate):
 def compute_verdict(run_kind, score, base_score=None, incumbent_score=None):
     """Decide the verdict for `score` (this arm's result) given `run_kind`.
 
-    `first_run`: judged against `base_score` (the untrained base). Merely
+    Returns a dict: `{"verdict": ..., "lift_over_base": float|None,
+    "lift_over_incumbent": float|None}` — the two deltas are `None` whenever
+    the corresponding comparison score was not supplied, or was incomparable.
+
+    `FIRST_RUN`: judged against `base_score` (the untrained base). Merely
     matching the base is `no_lift_over_base` — a null result, not a pass.
     Supplying an `incumbent_score` for a first run means `run_kind` disagrees
     with the evidence (a first train has no incumbent), so this refuses rather
     than guessing which comparison was intended.
 
-    `retrain`: judged against `incumbent_score` (the currently-shipped model).
+    `RETRAIN`: judged against `incumbent_score` (the currently-shipped model).
     Beating the base but losing to the incumbent is `regressed` — shipping it
     would make the product worse while looking like progress on a
-    base-relative chart. A `retrain` with no `incumbent_score` supplied is the
-    same evidence/run_kind mismatch as above, refused the same way.
+    base-relative chart. A `RETRAIN` with no `incumbent_score` supplied is the
+    same evidence/run_kind mismatch as above, refused the same way. If
+    `base_score` is also supplied its delta is recorded for context but never
+    drives the verdict.
 
     Both branches require a delta larger than `score["margin_floor"]` before
     calling a direction at all, so no verdict rests on a single account.
+
+    A `base_score`/`incumbent_score` from a different seal does NOT raise here
+    — `compare_scores`'s refusal is caught and turned into the `incomparable`
+    verdict, so a genuine attempt to compare across a reseal is recorded
+    rather than silently dropped. A `run_kind`/evidence mismatch is a caller
+    bug, not a seal mismatch, and still raises `EvalRefused`.
     """
     if run_kind not in RUN_KINDS:
         raise EvalRefused(f"unknown run_kind {run_kind!r} — refusing to guess a verdict")
@@ -277,30 +333,48 @@ def compute_verdict(run_kind, score, base_score=None, incumbent_score=None):
     if run_kind == FIRST_RUN:
         if incumbent_score is not None:
             raise EvalRefused(
-                "run_kind='first_run' but an incumbent_score was supplied — a first train has no "
+                f"run_kind={FIRST_RUN!r} but an incumbent_score was supplied — a first train has no "
                 "incumbent to compare against; run_kind disagrees with the evidence"
             )
         if base_score is None:
-            raise EvalRefused("run_kind='first_run' requires base_score to judge lift over the untrained base")
-        delta = compare_scores(base_score, score)
+            raise EvalRefused(f"run_kind={FIRST_RUN!r} requires base_score to judge lift over the untrained base")
+        try:
+            delta = compare_scores(base_score, score)
+        except EvalRefused:
+            return {"verdict": VERDICT_INCOMPARABLE, "lift_over_base": None, "lift_over_incumbent": None}
         if delta > margin:
-            return "lift_over_base"
-        if delta < -margin:
-            return "worse_than_base"
-        return "no_lift_over_base"
+            verdict = VERDICT_IMPROVED
+        elif delta < -margin:
+            verdict = VERDICT_REGRESSED
+        else:
+            verdict = VERDICT_NO_LIFT_OVER_BASE
+        return {"verdict": verdict, "lift_over_base": delta, "lift_over_incumbent": None}
 
     # RETRAIN
     if incumbent_score is None:
         raise EvalRefused(
-            "run_kind='retrain' requires incumbent_score — there is no incumbent to retrain "
+            f"run_kind={RETRAIN!r} requires incumbent_score — there is no incumbent to retrain "
             "against; run_kind disagrees with the evidence"
         )
-    delta = compare_scores(incumbent_score, score)
+    try:
+        delta = compare_scores(incumbent_score, score)
+    except EvalRefused:
+        return {"verdict": VERDICT_INCOMPARABLE, "lift_over_base": None, "lift_over_incumbent": None}
     if delta > margin:
-        return "improved_over_incumbent"
-    if delta < -margin:
-        return "regressed"
-    return "no_lift_over_incumbent"
+        verdict = VERDICT_IMPROVED
+    elif delta < -margin:
+        verdict = VERDICT_REGRESSED
+    else:
+        verdict = VERDICT_INCONCLUSIVE
+
+    lift_over_base = None
+    if base_score is not None:
+        try:
+            lift_over_base = compare_scores(base_score, score)
+        except EvalRefused:
+            lift_over_base = None  # informational only; never blocks the incumbent-driven verdict above
+
+    return {"verdict": verdict, "lift_over_base": lift_over_base, "lift_over_incumbent": delta}
 
 
 # ---------------------------------------------------------------------------
@@ -308,34 +382,80 @@ def compute_verdict(run_kind, score, base_score=None, incumbent_score=None):
 # ---------------------------------------------------------------------------
 
 
-def write_score(slug, run_id, arm_id, run_kind, score, verdict, url=None, service_role_key=None):
+def _utc_now_iso():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def write_score(
+    slug, model_id, arm, run_kind, score, verdict_result, *,
+    run_id=None, base_model=None, compared_to_model_id=None, notes=None,
+    scored_at=None, url=None, service_role_key=None,
+):
     """Persist one scored arm to `factory_model_evals` via `supabase_rest.upsert`.
 
-    Refuses (raises `EvalRefused`, writes nothing) unless `score["status"] ==
-    "scored"` — a refusal from `score_arm` must never reach the DB layer, by
-    construction, not by the caller remembering to check first.
+    `verdict_result` is the dict `compute_verdict` returns (or, for a caller
+    that computed a verdict some other way, any dict/string with the same
+    `verdict`/`lift_over_base`/`lift_over_incumbent` shape).
+
+    Refuses (raises `EvalRefused`, writes nothing) when:
+      * `score["status"] != "scored"` — a refusal from `score_arm` must never
+        reach the DB layer, by construction, not by the caller remembering to
+        check first;
+      * `arm` is not one of `ARMS`, `run_kind` is not one of `RUN_KINDS`, or
+        the verdict is not one of `VERDICTS` — the DB's own CHECK constraints
+        would reject the row anyway; refusing locally turns that into a clear
+        message instead of a live PostgREST 400.
     """
     if score.get("status") != "scored":
         raise EvalRefused(
             f"refusing to write a non-scored result (status={score.get('status')!r}) to "
             f"{MODEL_EVALS_TABLE} — a refused score is not a row"
         )
+    if arm not in ARMS:
+        raise EvalRefused(f"arm {arm!r} is not one of {ARMS} — the DB's CHECK constraint would reject this row")
+    if run_kind not in RUN_KINDS:
+        raise EvalRefused(
+            f"run_kind {run_kind!r} is not one of {RUN_KINDS} — the DB's CHECK constraint would reject this row"
+        )
+
+    verdict = verdict_result["verdict"] if isinstance(verdict_result, dict) else verdict_result
+    lift_over_base = verdict_result.get("lift_over_base") if isinstance(verdict_result, dict) else None
+    lift_over_incumbent = verdict_result.get("lift_over_incumbent") if isinstance(verdict_result, dict) else None
+    if verdict not in VERDICTS:
+        raise EvalRefused(
+            f"verdict {verdict!r} is not one of {VERDICTS} — the DB's CHECK constraint would reject this row"
+        )
+
     row = {
         "org_slug": slug,
-        "run_id": run_id,
-        "arm_id": arm_id,
-        "run_kind": run_kind,
-        "iteration": score["iteration"],
+        "model_id": model_id,
+        "arm": arm,
+        # No separate eval-set registry exists yet; derived deterministically
+        # from the sealed manifest's own identity so re-scoring the same
+        # (slug, iteration) is the same eval_set_id every time.
+        "eval_set_id": f"{slug}:heldout:{score['iteration']}",
         "population_fingerprint": score["population_fingerprint"],
-        "n_heldout": score["n_heldout"],
-        "n_answered": score["n_answered"],
-        "valid_emit_rate": score["valid_emit_rate"],
-        "balanced_agreement": score["balanced_agreement"],
-        "class_accuracy": score["class_accuracy"],
-        "margin_floor": score["margin_floor"],
+        "n_items": score["n_heldout"],
+        "metrics": {
+            "balanced_agreement": score["balanced_agreement"],
+            "class_accuracy": score["class_accuracy"],
+            "margin_floor": score["margin_floor"],
+            "valid_emit_rate": score["valid_emit_rate"],
+            "n_answered": score["n_answered"],
+        },
+        "scored_at": scored_at or _utc_now_iso(),
+        "run_id": run_id,
+        "base_model": base_model,
+        "heldout_iteration": score["iteration"],
+        "run_kind": run_kind,
+        "score": score["balanced_agreement"],
         "verdict": verdict,
+        "compared_to_model_id": compared_to_model_id,
+        "lift_over_base": lift_over_base,
+        "lift_over_incumbent": lift_over_incumbent,
+        "notes": notes,
     }
     return supabase_rest.upsert(
-        MODEL_EVALS_TABLE, [row], on_conflict="org_slug,run_id,arm_id",
+        MODEL_EVALS_TABLE, [row], on_conflict="model_id,eval_set_id,population_fingerprint",
         url=url, service_role_key=service_role_key,
     )

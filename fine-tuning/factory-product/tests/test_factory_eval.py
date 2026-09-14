@@ -5,8 +5,11 @@
 module does not either. What's under test is the scoring LOGIC: given
 predictions and labels for a set of items, does it grade honestly against the
 sealed held-out set, refuse a constant predictor's inflated number, refuse a
-low-answer-rate run, refuse to diff scores from different seals, and pick the
-right verdict for a first train vs. a retrain without guessing.
+low-answer-rate run, turn a cross-seal comparison into an `incomparable`
+verdict rather than a number, and pick the right verdict for a first train vs.
+a retrain without guessing — and does the row it would write to
+`factory_model_evals` only ever use values the DB's own CHECK constraints
+accept.
 
 Mirrors `tests/test_heldout_anchor.py`'s fixture style: `factory_heldout.HERE`
 is monkeypatched to a tmp_path so `seal()` writes real manifests to a scratch
@@ -151,7 +154,10 @@ def test_a_refused_score_never_reaches_write_score(sealed, monkeypatch):
     monkeypatch.setattr(fe.supabase_rest, "upsert", lambda *a, **k: calls.append((a, k)))
     fake = {"status": "refused_low_valid_emit", "iteration": ITERATION}
     with pytest.raises(fe.EvalRefused, match="not a row"):
-        fe.write_score(SLUG, "run-1", "candidate", fe.FIRST_RUN, fake, "lift_over_base")
+        fe.write_score(
+            SLUG, "candidate-v2-agent", fe.ARM_CANDIDATE, fe.FIRST_RUN, fake,
+            {"verdict": fe.VERDICT_IMPROVED, "lift_over_base": 0.3, "lift_over_incumbent": None},
+        )
     assert calls == []
 
 
@@ -175,6 +181,20 @@ def test_same_fingerprint_compares_cleanly(sealed):
     assert delta == pytest.approx(candidate["balanced_agreement"] - base["balanced_agreement"])
 
 
+def test_cross_fingerprint_verdict_is_incomparable_not_an_exception(sealed):
+    """`compute_verdict` must not blow up on a reseal — it records the attempt
+    as a real `incomparable` verdict instead of silently producing nothing."""
+    base = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)
+    candidate = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)
+    candidate = dict(candidate)
+    candidate["population_fingerprint"] = "a-different-seal-entirely"
+
+    result = fe.compute_verdict(fe.FIRST_RUN, candidate, base_score=base)
+    assert result["verdict"] == fe.VERDICT_INCOMPARABLE
+    assert result["lift_over_base"] is None
+    assert result["lift_over_incumbent"] is None
+
+
 # --------------------------------------------------------------------------
 # Verdicts — first train vs. retrain
 # --------------------------------------------------------------------------
@@ -184,15 +204,16 @@ def test_first_train_matching_base_is_no_lift_not_a_pass(sealed):
     """Merely matching the base is a null result, never a pass."""
     base = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)
     candidate = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)
-    verdict = fe.compute_verdict(fe.FIRST_RUN, candidate, base_score=base)
-    assert verdict == "no_lift_over_base"
+    result = fe.compute_verdict(fe.FIRST_RUN, candidate, base_score=base)
+    assert result["verdict"] == fe.VERDICT_NO_LIFT_OVER_BASE
 
 
-def test_first_train_clearing_the_margin_is_a_lift(sealed):
+def test_first_train_clearing_the_margin_is_improved(sealed):
     base = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)
     candidate = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)
-    verdict = fe.compute_verdict(fe.FIRST_RUN, candidate, base_score=base)
-    assert verdict == "lift_over_base"
+    result = fe.compute_verdict(fe.FIRST_RUN, candidate, base_score=base)
+    assert result["verdict"] == fe.VERDICT_IMPROVED
+    assert result["lift_over_base"] == pytest.approx(0.5)
 
 
 def test_retrain_beating_base_but_losing_to_incumbent_is_regressed(sealed):
@@ -206,17 +227,19 @@ def test_retrain_beating_base_but_losing_to_incumbent_is_regressed(sealed):
         candidate_predictions[item_id] = "no_action"
     candidate = fe.score_arm(SLUG, ITERATION, candidate_predictions, LABELS)
     assert candidate["balanced_agreement"] > base["balanced_agreement"]
-    verdict = fe.compute_verdict(
+    result = fe.compute_verdict(
         fe.RETRAIN, candidate, base_score=base, incumbent_score=incumbent
     )
-    assert verdict == "regressed"
+    assert result["verdict"] == fe.VERDICT_REGRESSED
+    assert result["lift_over_incumbent"] < 0
+    assert result["lift_over_base"] > 0  # recorded for context, did not drive the verdict
 
 
 def test_retrain_beating_incumbent_is_improved(sealed):
     incumbent = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)  # 0.5
     candidate = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)  # 1.0
-    verdict = fe.compute_verdict(fe.RETRAIN, candidate, incumbent_score=incumbent)
-    assert verdict == "improved_over_incumbent"
+    result = fe.compute_verdict(fe.RETRAIN, candidate, incumbent_score=incumbent)
+    assert result["verdict"] == fe.VERDICT_IMPROVED
 
 
 def test_first_run_with_an_incumbent_score_is_refused(sealed):
@@ -259,8 +282,8 @@ def test_margin_floor_rejects_a_single_account_swing(sealed):
     assert abs(base["balanced_agreement"] - candidate["balanced_agreement"]) == pytest.approx(
         base["margin_floor"]
     )
-    verdict = fe.compute_verdict(fe.RETRAIN, candidate, incumbent_score=base)
-    assert verdict == "no_lift_over_incumbent"
+    result = fe.compute_verdict(fe.RETRAIN, candidate, incumbent_score=base)
+    assert result["verdict"] == fe.VERDICT_INCONCLUSIVE
 
 
 def test_margin_floor_allows_a_swing_that_clears_two_accounts(sealed):
@@ -271,8 +294,8 @@ def test_margin_floor_allows_a_swing_that_clears_two_accounts(sealed):
 
     base = fe.score_arm(SLUG, ITERATION, base_predictions, LABELS)
     candidate = fe.score_arm(SLUG, ITERATION, candidate_predictions, LABELS)
-    verdict = fe.compute_verdict(fe.RETRAIN, candidate, incumbent_score=base)
-    assert verdict == "regressed"
+    result = fe.compute_verdict(fe.RETRAIN, candidate, incumbent_score=base)
+    assert result["verdict"] == fe.VERDICT_REGRESSED
 
 
 def test_margin_floor_needs_at_least_two_classes(sealed):
@@ -281,6 +304,48 @@ def test_margin_floor_needs_at_least_two_classes(sealed):
     predictions = {i: "no_action" for i in ALL_IDS}
     with pytest.raises(fe.EvalRefused, match="at least a majority and a minority class"):
         fe.score_arm("single-class-org", 1, predictions, single_class_labels)
+
+
+# --------------------------------------------------------------------------
+# Closed vocabularies — what the DB's CHECK constraints will actually accept
+# --------------------------------------------------------------------------
+
+
+def test_verdicts_emitted_by_compute_verdict_are_all_in_the_closed_vocabulary(sealed):
+    """factory_model_evals.verdict is CHECK-constrained to exactly five values.
+    Every branch compute_verdict can take must land inside that set."""
+    base = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)  # 0.5
+    incumbent = fe.score_arm(SLUG, ITERATION, _predict_constant("escalate"), LABELS)  # 0.5
+    perfect = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)  # 1.0
+    reseal = dict(perfect)
+    reseal["population_fingerprint"] = "different-seal"
+
+    seen = {
+        fe.compute_verdict(fe.FIRST_RUN, perfect, base_score=base)["verdict"],
+        fe.compute_verdict(fe.FIRST_RUN, base, base_score=base)["verdict"],
+        fe.compute_verdict(fe.RETRAIN, perfect, incumbent_score=incumbent)["verdict"],
+        fe.compute_verdict(fe.RETRAIN, incumbent, incumbent_score=incumbent)["verdict"],
+        fe.compute_verdict(fe.FIRST_RUN, reseal, base_score=base)["verdict"],
+    }
+    assert seen <= set(fe.VERDICTS)
+    # And the fixture actually exercised more than one branch, not a tautology.
+    assert len(seen) > 1
+
+
+def test_write_score_refuses_an_arm_outside_the_closed_vocabulary(sealed):
+    score = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)
+    verdict = fe.compute_verdict(fe.FIRST_RUN, score, base_score=score)
+    with pytest.raises(fe.EvalRefused, match="is not one of"):
+        fe.write_score(SLUG, "candidate-v2-agent", "champion", fe.FIRST_RUN, score, verdict)
+
+
+def test_write_score_refuses_a_verdict_outside_the_closed_vocabulary(sealed):
+    score = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)
+    with pytest.raises(fe.EvalRefused, match="is not one of"):
+        fe.write_score(
+            SLUG, "candidate-v2-agent", fe.ARM_CANDIDATE, fe.FIRST_RUN, score,
+            {"verdict": "lift_over_base", "lift_over_base": 0.5, "lift_over_incumbent": None},
+        )
 
 
 # --------------------------------------------------------------------------
@@ -294,18 +359,25 @@ def test_write_score_calls_the_existing_supabase_rest_upsert(sealed, monkeypatch
         fe.supabase_rest, "upsert",
         lambda table, rows, on_conflict, **kw: calls.append((table, rows, on_conflict, kw)) or rows,
     )
+    base = fe.score_arm(SLUG, ITERATION, _predict_constant("no_action"), LABELS)
     score = fe.score_arm(SLUG, ITERATION, _predict_perfect(), LABELS)
-    fe.write_score(SLUG, "run-1", "candidate-v2", fe.FIRST_RUN, score, "lift_over_base")
+    verdict = fe.compute_verdict(fe.FIRST_RUN, score, base_score=base)
+    fe.write_score(SLUG, "candidate-v2-agent", fe.ARM_CANDIDATE, fe.FIRST_RUN, score, verdict)
 
     assert len(calls) == 1
     table, rows, on_conflict, kw = calls[0]
     assert table == fe.MODEL_EVALS_TABLE
-    assert on_conflict == "org_slug,run_id,arm_id"
+    assert on_conflict == "model_id,eval_set_id,population_fingerprint"
     row = rows[0]
     assert row["org_slug"] == SLUG
-    assert row["run_id"] == "run-1"
-    assert row["arm_id"] == "candidate-v2"
+    assert row["model_id"] == "candidate-v2-agent"
+    assert row["arm"] == fe.ARM_CANDIDATE
     assert row["run_kind"] == fe.FIRST_RUN
     assert row["population_fingerprint"] == score["population_fingerprint"]
-    assert row["balanced_agreement"] == score["balanced_agreement"]
-    assert row["verdict"] == "lift_over_base"
+    assert row["score"] == score["balanced_agreement"]
+    assert row["metrics"]["balanced_agreement"] == score["balanced_agreement"]
+    assert row["n_items"] == score["n_heldout"]
+    assert row["verdict"] == verdict["verdict"]
+    assert row["lift_over_base"] == verdict["lift_over_base"]
+    assert row["lift_over_incumbent"] is None
+    assert row["scored_at"]  # non-empty; NOT NULL in the real schema
